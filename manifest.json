@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "NAVI",
+  "version": "1.0",
+  "description": "AI-powered accessibility assistant for Google Sheets, built for BVI users.",
+
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+
+  "host_permissions": [
+    "https://docs.google.com/spreadsheets/*"
+  ],
+
+  "content_scripts": [
+    {
+      "matches": ["https://docs.google.com/spreadsheets/*"],
+      "js": ["config.js", "api.js", "content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_end"
+    }
+  ]
+}
