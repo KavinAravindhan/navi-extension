@@ -25,12 +25,16 @@ async function readSpreadsheetData() {
     const rows = data.values || [];
     if (rows.length === 0) return "Sheet appears to be empty.";
 
+    // Find the maximum number of columns across all rows
     const maxCols = Math.max(...rows.map(r => r.length));
 
     let result = `Sheet: ${decodeURIComponent(sheetName)}\n\n`;
 
     rows.forEach((row, i) => {
+      // Skip completely empty rows
       if (row.every(cell => !cell || cell.toString().trim() === '')) return;
+
+      // Pad row to maxCols so we don't miss trailing empty cells
       const paddedRow = Array.from({ length: maxCols }, (_, j) => row[j] || '');
       result += `Row ${i + 1}: ${paddedRow.join(' | ')}\n`;
     });
@@ -99,110 +103,7 @@ function editCell(cellAddress, newValue) {
 }
 
 // ========================================================
-// SECTION 3: TEXT TO SPEECH
-// ========================================================
-
-// Tracks whether speech is currently playing
-let isSpeaking = false;
-
-/**
- * Speaks the given text using the Web Speech API.
- * Handles edge cases: unsupported browsers, empty text,
- * interrupting ongoing speech, and Chrome's speech synthesis bug.
- * @param {string} text - The text to read aloud
- */
-function speakText(text) {
-  // Edge case 1: Browser doesn't support speech synthesis
-  if (!window.speechSynthesis) {
-    console.warn("NAVI: Text-to-speech is not supported in this browser.");
-    return;
-  }
-
-  // Edge case 2: Empty or whitespace-only text
-  if (!text || text.trim() === "") {
-    console.warn("NAVI: No text to speak.");
-    return;
-  }
-
-  // Edge case 3: Strip markdown symbols that would be read aloud awkwardly
-  // e.g. "**bold**" would be read as "asterisk asterisk bold asterisk asterisk"
-  const cleanText = text
-    .replace(/\*\*(.*?)\*\*/g, '$1')   // bold
-    .replace(/\*(.*?)\*/g, '$1')        // italic
-    .replace(/#{1,6}\s/g, '')           // headers
-    .replace(/`([^`]+)`/g, '$1')        // inline code
-    .replace(/\n+/g, '. ')              // newlines to pauses
-    .trim();
-
-  // Edge case 4: Cancel any speech currently playing before starting new
-  window.speechSynthesis.cancel();
-  isSpeaking = false;
-  updateStopButton(false);
-
-  const utterance = new SpeechSynthesisUtterance(cleanText);
-  utterance.lang = "en-US";
-  utterance.rate = 0.95;   // Slightly slower for clarity
-  utterance.pitch = 1;
-  utterance.volume = 1;
-
-  // Edge case 5: Chrome has a bug where long speech silently stops after ~15 seconds
-  // This workaround resumes it every 10 seconds
-  const resumeInterval = setInterval(() => {
-    if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
-      window.speechSynthesis.resume();
-    }
-  }, 10000);
-
-  utterance.onstart = () => {
-    isSpeaking = true;
-    updateStopButton(true);
-  };
-
-  utterance.onend = () => {
-    isSpeaking = false;
-    updateStopButton(false);
-    clearInterval(resumeInterval);
-  };
-
-  // Edge case 6: Handle speech errors gracefully
-  utterance.onerror = (event) => {
-    // "interrupted" is triggered when we cancel speech intentionally — not a real error
-    if (event.error === "interrupted") return;
-    console.error("NAVI: Speech error:", event.error);
-    isSpeaking = false;
-    updateStopButton(false);
-    clearInterval(resumeInterval);
-  };
-
-  window.speechSynthesis.speak(utterance);
-}
-
-/**
- * Stops any ongoing speech immediately.
- * Called when the stop button is clicked.
- */
-function stopSpeaking() {
-  if (window.speechSynthesis) {
-    window.speechSynthesis.cancel();
-    isSpeaking = false;
-    updateStopButton(false);
-  }
-}
-
-/**
- * Updates the stop button appearance based on speaking state.
- * @param {boolean} speaking - Whether speech is currently active
- */
-function updateStopButton(speaking) {
-  const stopBtn = document.getElementById("navi-stop-btn");
-  if (stopBtn) {
-    stopBtn.style.opacity = speaking ? "1" : "0.4";
-    stopBtn.title = speaking ? "Stop speaking" : "Nothing playing";
-  }
-}
-
-// ========================================================
-// SECTION 4: VOICE INPUT
+// SECTION 3: VOICE INPUT
 // ========================================================
 
 let isListening = false;
@@ -251,8 +152,6 @@ function toggleVoiceRecognition() {
     isListening = false;
     updateVoiceButton(false);
   } else {
-    // Stop any ongoing speech before listening — avoids mic picking up NAVI's voice
-    stopSpeaking();
     recognition.start();
     isListening = true;
     updateVoiceButton(true);
@@ -268,7 +167,7 @@ function updateVoiceButton(listening) {
 }
 
 // ========================================================
-// SECTION 5: BUILDING THE CHAT UI
+// SECTION 4: BUILDING THE CHAT UI
 // ========================================================
 
 function createNaviUI() {
@@ -286,20 +185,7 @@ function createNaviUI() {
   naviPanel.innerHTML = `
     <div id="navi-header">
       <span>👁️ NAVI Assistant</span>
-      <div style="display: flex; gap: 6px; align-items: center;">
-        <button id="navi-stop-btn" title="Nothing playing" style="
-          background: none;
-          border: none;
-          color: #ffffff;
-          font-size: 16px;
-          cursor: pointer;
-          padding: 4px 8px;
-          border-radius: 6px;
-          opacity: 0.4;
-          transition: opacity 0.2s ease;
-        ">⏹️</button>
-        <button id="navi-close-btn" title="Close NAVI">✕</button>
-      </div>
+      <button id="navi-close-btn" title="Close NAVI">✕</button>
     </div>
     <div id="navi-messages">
       <div class="navi-message navi-ai-message">
@@ -324,7 +210,7 @@ function createNaviUI() {
 }
 
 // ========================================================
-// SECTION 6: UI EVENT LISTENERS AND MAIN LOGIC
+// SECTION 5: UI EVENT LISTENERS AND MAIN LOGIC
 // ========================================================
 
 function setupUIEventListeners() {
@@ -334,7 +220,6 @@ function setupUIEventListeners() {
   const sendBtn = document.getElementById("navi-send-btn");
   const textInput = document.getElementById("navi-text-input");
   const voiceBtn = document.getElementById("navi-voice-btn");
-  const stopBtn = document.getElementById("navi-stop-btn");
 
   naviIcon.addEventListener("click", () => {
     naviPanel.style.display = "flex";
@@ -342,9 +227,7 @@ function setupUIEventListeners() {
     loadSpreadsheetAndSummarize();
   });
 
-  // Stop speech when panel is closed
   closeBtn.addEventListener("click", () => {
-    stopSpeaking();
     naviPanel.style.display = "none";
     naviIcon.style.display = "flex";
   });
@@ -361,10 +244,6 @@ function setupUIEventListeners() {
 
   voiceBtn.addEventListener("click", () => {
     toggleVoiceRecognition();
-  });
-
-  stopBtn.addEventListener("click", () => {
-    stopSpeaking();
   });
 
   initVoiceRecognition((transcript) => {
@@ -386,7 +265,6 @@ async function loadSpreadsheetAndSummarize() {
   const messages = document.getElementById("navi-messages");
   messages.lastChild.remove();
   addMessageToChat(summary, "ai");
-  speakText(summary);
 }
 
 async function handleUserMessage() {
@@ -395,10 +273,6 @@ async function handleUserMessage() {
   if (!userMessage) return;
 
   textInput.value = "";
-
-  // Stop any ongoing speech when user sends a new message
-  stopSpeaking();
-
   addMessageToChat(userMessage, "user");
   addMessageToChat("Thinking...", "ai", "navi-thinking");
 
@@ -413,7 +287,6 @@ async function handleUserMessage() {
   }
 
   addMessageToChat(aiResponse, "ai");
-  speakText(aiResponse);
 }
 
 function addMessageToChat(text, sender, extraClass = "") {
@@ -426,7 +299,7 @@ function addMessageToChat(text, sender, extraClass = "") {
 }
 
 // ========================================================
-// SECTION 7: INITIALIZE NAVI
+// SECTION 6: INITIALIZE NAVI
 // ========================================================
 
 function initializeNAVI() {
