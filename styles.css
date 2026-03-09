@@ -1,11 +1,7 @@
 /* styles.css */
-/* ----------- */
-/* Styles for the NAVI floating icon and chat panel. */
-/* Designed with BVI users in mind — high contrast, large text, clear focus states. */
 
 /* ========================================================
    NAVI FLOATING ICON
-   The small button that sits in the bottom right corner
    ======================================================== */
 
 #navi-icon {
@@ -13,36 +9,29 @@
   bottom: 30px;
   right: 30px;
   z-index: 99999;
-
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
-
   width: 65px;
   height: 65px;
   border-radius: 50%;
-
-  background-color: #1a1a2e;
+  background-color: #000000;
   color: #ffffff;
-
   cursor: pointer;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
   transition: transform 0.2s ease, background-color 0.2s ease;
-
-  /* High contrast border for visibility */
   border: 2px solid #ffffff;
 }
 
 #navi-icon:hover {
-  background-color: #16213e;
+  background-color: #222222;
   transform: scale(1.08);
 }
 
 /* ========================================================
    NAVI CHAT PANEL
-   The main chat window that opens when the icon is clicked
    ======================================================== */
 
 #navi-panel {
@@ -50,34 +39,22 @@
   bottom: 30px;
   right: 30px;
   z-index: 99999;
-
   display: flex;
   flex-direction: column;
-
   width: 360px;
   height: 520px;
   border-radius: 16px;
-
-  background-color: #1a1a2e;
+  background-color: #000000;
   color: #ffffff;
-
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
   border: 2px solid #ffffff;
-
-  /* Smooth appearance animation */
   animation: naviSlideIn 0.25s ease;
   overflow: hidden;
 }
 
 @keyframes naviSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* ========================================================
@@ -89,10 +66,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px;
-
-  background-color: #16213e;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-
+  background-color: #111111;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   font-size: 15px;
   font-weight: bold;
   letter-spacing: 0.5px;
@@ -114,8 +89,89 @@
 }
 
 /* ========================================================
+   FONT SIZE PICKER
+   ======================================================== */
+
+#navi-font-picker {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 24px;
+  background-color: #000000;
+}
+
+#navi-font-picker-label {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-align: center;
+}
+
+#navi-font-buttons {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.navi-font-btn {
+  background-color: #111111;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.1s ease;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.navi-font-btn:nth-child(1) { font-size: 13px; width: 40px; height: 40px; }
+.navi-font-btn:nth-child(2) { font-size: 17px; width: 46px; height: 46px; }
+.navi-font-btn:nth-child(3) { font-size: 22px; width: 52px; height: 52px; }
+.navi-font-btn:nth-child(4) { font-size: 28px; width: 58px; height: 58px; }
+
+.navi-font-btn:hover {
+  border-color: #ffffff;
+  background-color: #222222;
+  transform: scale(1.05);
+}
+
+.navi-font-btn.navi-font-selected {
+  border-color: #ffffff;
+  background-color: #333333;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15);
+}
+
+#navi-font-confirm-btn {
+  background-color: #ffffff;
+  border: 2px solid #ffffff;
+  color: #000000;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 12px 24px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  letter-spacing: 0.3px;
+}
+
+#navi-font-confirm-btn:hover {
+  background-color: #dddddd;
+  transform: scale(1.03);
+}
+
+#navi-font-confirm-btn:active {
+  transform: scale(0.97);
+}
+
+/* ========================================================
    MESSAGES AREA
-   The scrollable area where chat messages appear
    ======================================================== */
 
 #navi-messages {
@@ -127,19 +183,15 @@
   gap: 10px;
 }
 
-/* Custom scrollbar for the messages area */
-#navi-messages::-webkit-scrollbar {
-  width: 6px;
-}
+#navi-messages::-webkit-scrollbar { width: 6px; }
+#navi-messages::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
+#navi-messages::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.25); border-radius: 3px; }
 
-#navi-messages::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-#navi-messages::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-}
+/* Font size classes */
+#navi-messages.navi-font-small  .navi-message { font-size: 12px; }
+#navi-messages.navi-font-medium .navi-message { font-size: 14px; }
+#navi-messages.navi-font-large  .navi-message { font-size: 17px; }
+#navi-messages.navi-font-xlarge .navi-message { font-size: 21px; line-height: 1.6; }
 
 /* ========================================================
    MESSAGE BUBBLES
@@ -150,28 +202,27 @@
   padding: 10px 14px;
   border-radius: 12px;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.6;
   word-wrap: break-word;
 }
 
-/* AI messages — left aligned, dark blue */
+/* AI messages — dark with white border */
 .navi-ai-message {
   align-self: flex-start;
-  background-color: #16213e;
+  background-color: #111111;
   color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-bottom-left-radius: 4px;
 }
 
-/* User messages — right aligned, bright accent */
+/* User messages — white with black text */
 .navi-user-message {
   align-self: flex-end;
-  background-color: #0f3460;
-  color: #ffffff;
+  background-color: #ffffff;
+  color: #000000;
   border-bottom-right-radius: 4px;
 }
 
-/* Thinking indicator — subtle pulse animation */
 .navi-thinking {
   opacity: 0.6;
   font-style: italic;
@@ -180,12 +231,11 @@
 
 @keyframes naviPulse {
   0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
+  50%       { opacity: 1; }
 }
 
 /* ========================================================
    INPUT AREA
-   The text box and buttons at the bottom
    ======================================================== */
 
 #navi-input-area {
@@ -193,37 +243,48 @@
   align-items: center;
   gap: 8px;
   padding: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
-  background-color: #16213e;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  background-color: #111111;
 }
 
 #navi-text-input {
   flex: 1;
   padding: 10px 12px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background-color: #1a1a2e;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background-color: #000000;
   color: #ffffff;
   font-size: 13px;
   outline: none;
   transition: border-color 0.2s ease;
 }
 
-/* High contrast focus state — important for accessibility */
-#navi-text-input:focus {
-  border-color: #ffffff;
+#navi-text-input:focus { border-color: #ffffff; }
+#navi-text-input::placeholder { color: rgba(255, 255, 255, 0.4); }
+
+/* Stop button — red */
+#navi-stop-btn {
+  background: none;
+  border: none;
+  color: #ff4444;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
 }
 
-#navi-text-input::placeholder {
-  color: rgba(255, 255, 255, 0.4);
+#navi-stop-btn:hover {
+  opacity: 1;
 }
 
-/* Shared styles for mic and send buttons */
+/* Voice and send buttons — black/white */
 #navi-voice-btn,
 #navi-send-btn {
-  background-color: #0f3460;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #ffffff;
+  background-color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #000000;
   font-size: 16px;
   width: 38px;
   height: 38px;
@@ -238,11 +299,10 @@
 
 #navi-voice-btn:hover,
 #navi-send-btn:hover {
-  background-color: #1a4a8a;
+  background-color: #dddddd;
   transform: scale(1.05);
 }
 
-/* Active state when button is pressed */
 #navi-voice-btn:active,
 #navi-send-btn:active {
   transform: scale(0.96);

@@ -26,6 +26,7 @@ async function readSpreadsheetData() {
     if (rows.length === 0) return "Sheet appears to be empty.";
 
     const maxCols = Math.max(...rows.map(r => r.length));
+
     let result = `Sheet: ${decodeURIComponent(sheetName)}\n\n`;
 
     rows.forEach((row, i) => {
@@ -54,7 +55,7 @@ function columnNumberToLetter(colNumber) {
 }
 
 // ========================================================
-// SECTION 2: HANDLING CELL EDITS (via Google Sheets API)
+// SECTION 2: HANDLING CELL EDITS
 // ========================================================
 
 function parseEditCommand(aiResponse) {
@@ -71,36 +72,26 @@ function parseEditCommand(aiResponse) {
 
 function editCell(cellAddress, newValue) {
   try {
-    const match = window.location.href.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-    if (!match) {
-      console.error("NAVI: Could not find spreadsheet ID");
+    const nameBox = document.querySelector(".cell-input-container input, #t-name-box-input, .waffle-name-box");
+    if (!nameBox) {
+      console.error("NAVI: Could not find the Name Box to navigate to cell");
       return;
     }
-    const spreadsheetId = match[1];
 
-    const activeTab = document.querySelector('.docs-sheet-active-tab');
-    let rawName = activeTab ? activeTab.textContent.trim() : 'Sheet1';
-    rawName = rawName.replace(/^\d+/, '').trim();
+    nameBox.click();
+    nameBox.value = cellAddress;
+    nameBox.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    nameBox.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
 
-    chrome.runtime.sendMessage({
-      action: "editCell",
-      spreadsheetId,
-      sheetName: rawName,
-      cellAddress,
-      newValue
-    }, (response) => {
-      if (response && response.success) {
-        console.log("NAVI: Cell edited successfully");
-        const confirmation = `Done! Cell ${cellAddress} has been updated to ${newValue}.`;
-        addMessageToChat(confirmation, "ai");
-        speakText(confirmation);
-      } else {
-        console.error("NAVI: Edit failed:", response?.error);
-        const errorMsg = "Sorry, I couldn't edit that cell. Please make sure you have edit access to this sheet.";
-        addMessageToChat(errorMsg, "ai");
-        speakText(errorMsg);
+    setTimeout(() => {
+      const activeCell = document.querySelector(".cell-input:focus, .waffle-cell-input");
+      if (activeCell) {
+        activeCell.focus();
+        activeCell.textContent = newValue;
+        activeCell.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        activeCell.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
       }
-    });
+    }, 500);
 
   } catch (error) {
     console.error("NAVI: Error editing cell:", error);
@@ -111,79 +102,71 @@ function editCell(cellAddress, newValue) {
 // SECTION 3: TEXT TO SPEECH
 // ========================================================
 
+// Tracks whether speech is currently playing
 let isSpeaking = false;
 
+/**
+ * Speaks the given text using the Web Speech API.
+ * Handles edge cases: unsupported browsers, empty text,
+ * interrupting ongoing speech, and Chrome's speech synthesis bug.
+ * @param {string} text - The text to read aloud
+ */
 function speakText(text) {
+  // Edge case 1: Browser doesn't support speech synthesis
   if (!window.speechSynthesis) {
     console.warn("NAVI: Text-to-speech is not supported in this browser.");
     return;
   }
 
+  // Edge case 2: Empty or whitespace-only text
   if (!text || text.trim() === "") {
     console.warn("NAVI: No text to speak.");
     return;
   }
 
+  // Edge case 3: Strip markdown symbols that would be read aloud awkwardly
+  // e.g. "**bold**" would be read as "asterisk asterisk bold asterisk asterisk"
   const cleanText = text
-    .replace(/\*\*(.*?)\*\*/g, '$1')
-    .replace(/\*(.*?)\*/g, '$1')
-    .replace(/#{1,6}\s/g, '')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/\n+/g, '. ')
+    .replace(/\*\*(.*?)\*\*/g, '$1')   // bold
+    .replace(/\*(.*?)\*/g, '$1')        // italic
+    .replace(/#{1,6}\s/g, '')           // headers
+    .replace(/`([^`]+)`/g, '$1')        // inline code
+    .replace(/\n+/g, '. ')              // newlines to pauses
     .trim();
 
+  // Edge case 4: Cancel any speech currently playing before starting new
   window.speechSynthesis.cancel();
   isSpeaking = false;
   updateStopButton(false);
 
   const utterance = new SpeechSynthesisUtterance(cleanText);
   utterance.lang = "en-US";
-  utterance.rate = 0.95;
+  utterance.rate = 0.95;   // Slightly slower for clarity
   utterance.pitch = 1;
   utterance.volume = 1;
 
-  const setVoice = () => {
-    const voices = window.speechSynthesis.getVoices();
-    const preferred = [
-      "Google US English",
-      "Google UK English Female",
-      "Google UK English Male",
-      "Microsoft Aria Online (Natural) - English (United States)",
-      "Microsoft Guy Online (Natural) - English (United States)",
-    ];
-    let chosen = null;
-    for (const name of preferred) {
-      chosen = voices.find(v => v.name === name);
-      if (chosen) break;
-    }
-    if (!chosen) {
-      chosen = voices.find(v => v.lang.startsWith("en") && !v.default);
-    }
-    if (chosen) {
-      utterance.voice = chosen;
-      console.log("NAVI: Using voice:", chosen.name);
-    }
-  };
-
-  const voices = window.speechSynthesis.getVoices();
-  if (voices.length > 0) {
-    setVoice();
-  } else {
-    window.speechSynthesis.onvoiceschanged = () => {
-      setVoice();
-      window.speechSynthesis.onvoiceschanged = null;
-    };
-  }
-
+  // Edge case 5: Chrome has a bug where long speech silently stops after ~15 seconds
+  // This workaround resumes it every 10 seconds
   const resumeInterval = setInterval(() => {
     if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
       window.speechSynthesis.resume();
     }
   }, 10000);
 
-  utterance.onstart = () => { isSpeaking = true; updateStopButton(true); };
-  utterance.onend = () => { isSpeaking = false; updateStopButton(false); clearInterval(resumeInterval); };
+  utterance.onstart = () => {
+    isSpeaking = true;
+    updateStopButton(true);
+  };
+
+  utterance.onend = () => {
+    isSpeaking = false;
+    updateStopButton(false);
+    clearInterval(resumeInterval);
+  };
+
+  // Edge case 6: Handle speech errors gracefully
   utterance.onerror = (event) => {
+    // "interrupted" is triggered when we cancel speech intentionally — not a real error
     if (event.error === "interrupted") return;
     console.error("NAVI: Speech error:", event.error);
     isSpeaking = false;
@@ -194,6 +177,10 @@ function speakText(text) {
   window.speechSynthesis.speak(utterance);
 }
 
+/**
+ * Stops any ongoing speech immediately.
+ * Called when the stop button is clicked.
+ */
 function stopSpeaking() {
   if (window.speechSynthesis) {
     window.speechSynthesis.cancel();
@@ -202,10 +189,14 @@ function stopSpeaking() {
   }
 }
 
+/**
+ * Updates the stop button appearance based on speaking state.
+ * @param {boolean} speaking - Whether speech is currently active
+ */
 function updateStopButton(speaking) {
   const stopBtn = document.getElementById("navi-stop-btn");
   if (stopBtn) {
-    stopBtn.style.opacity = speaking ? "1" : "0.5";
+    stopBtn.style.opacity = speaking ? "1" : "0.4";
     stopBtn.title = speaking ? "Stop speaking" : "Nothing playing";
   }
 }
@@ -260,6 +251,7 @@ function toggleVoiceRecognition() {
     isListening = false;
     updateVoiceButton(false);
   } else {
+    // Stop any ongoing speech before listening — avoids mic picking up NAVI's voice
     stopSpeaking();
     recognition.start();
     isListening = true;
@@ -280,13 +272,12 @@ function updateVoiceButton(listening) {
 // ========================================================
 
 function createNaviUI() {
-  const iconUrl = chrome.runtime.getURL('icons/navi_eye_black_bg.png');
-
   const naviIcon = document.createElement("div");
   naviIcon.id = "navi-icon";
   naviIcon.title = "Open NAVI Assistant";
   naviIcon.innerHTML = `
-    <img src="${iconUrl}" style="width: 38px; height: 38px; border-radius: 6px;" alt="NAVI" />
+    <span style="font-size: 20px;">👁️</span>
+    <span style="font-size: 12px; font-weight: bold;">NAVI</span>
   `;
 
   const naviPanel = document.createElement("div");
@@ -294,29 +285,28 @@ function createNaviUI() {
   naviPanel.style.display = "none";
   naviPanel.innerHTML = `
     <div id="navi-header">
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <img src="${iconUrl}" style="width: 22px; height: 22px; border-radius: 4px;" alt="NAVI" />
-        <span>NAVI Assistant</span>
-      </div>
+      <span>👁️ NAVI Assistant</span>
       <div style="display: flex; gap: 6px; align-items: center;">
-        <button id="navi-stop-btn" title="Nothing playing">⏹️</button>
+        <button id="navi-stop-btn" title="Nothing playing" style="
+          background: none;
+          border: none;
+          color: #ffffff;
+          font-size: 16px;
+          cursor: pointer;
+          padding: 4px 8px;
+          border-radius: 6px;
+          opacity: 0.4;
+          transition: opacity 0.2s ease;
+        ">⏹️</button>
         <button id="navi-close-btn" title="Close NAVI">✕</button>
       </div>
     </div>
-
-    <div id="navi-font-picker">
-      <span id="navi-font-picker-label">Choose your text size:</span>
-      <div id="navi-font-buttons">
-        <button class="navi-font-btn" data-size="small">A</button>
-        <button class="navi-font-btn navi-font-selected" data-size="medium">A</button>
-        <button class="navi-font-btn" data-size="large">A</button>
-        <button class="navi-font-btn" data-size="xlarge">A</button>
+    <div id="navi-messages">
+      <div class="navi-message navi-ai-message">
+        Hi! I'm NAVI. Opening your spreadsheet now...
       </div>
-      <button id="navi-font-confirm-btn">Confirm & Load Sheet ➤</button>
     </div>
-
-    <div id="navi-messages" style="display: none;"></div>
-    <div id="navi-input-area" style="display: none;">
+    <div id="navi-input-area">
       <input
         type="text"
         id="navi-text-input"
@@ -337,78 +327,45 @@ function createNaviUI() {
 // SECTION 6: UI EVENT LISTENERS AND MAIN LOGIC
 // ========================================================
 
-let selectedFontSize = "medium";
-let summaryLoaded = false;
-
-function applyFontSize(size) {
-  const messages = document.getElementById("navi-messages");
-  if (!messages) return;
-  messages.classList.remove("navi-font-small", "navi-font-medium", "navi-font-large", "navi-font-xlarge");
-  messages.classList.add(`navi-font-${size}`);
-}
-
-function renderMarkdown(text) {
-  return text
-    // Bold
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    // Newlines to <br> so GPT's line breaks render properly
-    .replace(/\n/g, '<br>');
-}
-
 function setupUIEventListeners() {
   const naviIcon = document.getElementById("navi-icon");
   const naviPanel = document.getElementById("navi-panel");
   const closeBtn = document.getElementById("navi-close-btn");
   const sendBtn = document.getElementById("navi-send-btn");
   const textInput = document.getElementById("navi-text-input");
-  const fontButtons = document.querySelectorAll(".navi-font-btn");
-  const confirmBtn = document.getElementById("navi-font-confirm-btn");
+  const voiceBtn = document.getElementById("navi-voice-btn");
+  const stopBtn = document.getElementById("navi-stop-btn");
 
   naviIcon.addEventListener("click", () => {
     naviPanel.style.display = "flex";
     naviIcon.style.display = "none";
-
-    if (summaryLoaded) {
-      document.getElementById("navi-font-picker").style.display = "none";
-      document.getElementById("navi-messages").style.display = "flex";
-      document.getElementById("navi-input-area").style.display = "flex";
-    } else {
-      document.getElementById("navi-font-picker").style.display = "flex";
-      document.getElementById("navi-messages").style.display = "none";
-      document.getElementById("navi-input-area").style.display = "none";
-    }
+    loadSpreadsheetAndSummarize();
   });
 
+  // Stop speech when panel is closed
   closeBtn.addEventListener("click", () => {
     stopSpeaking();
     naviPanel.style.display = "none";
     naviIcon.style.display = "flex";
   });
 
-  fontButtons.forEach(btn => {
-    btn.addEventListener("click", () => {
-      fontButtons.forEach(b => b.classList.remove("navi-font-selected"));
-      btn.classList.add("navi-font-selected");
-      selectedFontSize = btn.dataset.size;
-    });
+  sendBtn.addEventListener("click", () => {
+    handleUserMessage();
   });
-
-  confirmBtn.addEventListener("click", () => {
-    document.getElementById("navi-font-picker").style.display = "none";
-    document.getElementById("navi-messages").style.display = "flex";
-    document.getElementById("navi-input-area").style.display = "flex";
-    applyFontSize(selectedFontSize);
-    loadSpreadsheetAndSummarize();
-  });
-
-  sendBtn.addEventListener("click", () => handleUserMessage());
 
   textInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") handleUserMessage();
+    if (event.key === "Enter") {
+      handleUserMessage();
+    }
   });
 
-  document.getElementById("navi-voice-btn").addEventListener("click", () => toggleVoiceRecognition());
-  document.getElementById("navi-stop-btn").addEventListener("click", () => stopSpeaking());
+  voiceBtn.addEventListener("click", () => {
+    toggleVoiceRecognition();
+  });
+
+  stopBtn.addEventListener("click", () => {
+    stopSpeaking();
+  });
 
   initVoiceRecognition((transcript) => {
     textInput.value = transcript;
@@ -417,7 +374,7 @@ function setupUIEventListeners() {
 }
 
 async function loadSpreadsheetAndSummarize() {
-  addMessageToChat("Hi! I'm NAVI, your accessibility assistant. Let me scan your spreadsheet now...", "ai");
+  addMessageToChat("Scanning your spreadsheet...", "ai");
 
   const data = await readSpreadsheetData();
   setSpreadsheetContext(data);
@@ -426,10 +383,10 @@ async function loadSpreadsheetAndSummarize() {
     "Please summarize this spreadsheet for a blind user. Be concise and describe what data is tracked."
   );
 
+  const messages = document.getElementById("navi-messages");
+  messages.lastChild.remove();
   addMessageToChat(summary, "ai");
   speakText(summary);
-
-  summaryLoaded = true;
 }
 
 async function handleUserMessage() {
@@ -438,6 +395,8 @@ async function handleUserMessage() {
   if (!userMessage) return;
 
   textInput.value = "";
+
+  // Stop any ongoing speech when user sends a new message
   stopSpeaking();
 
   addMessageToChat(userMessage, "user");
@@ -451,21 +410,17 @@ async function handleUserMessage() {
   const editCommand = parseEditCommand(aiResponse);
   if (editCommand) {
     editCell(editCommand.cellAddress, editCommand.newValue);
-  } else {
-    addMessageToChat(aiResponse, "ai");
-    speakText(aiResponse);
   }
+
+  addMessageToChat(aiResponse, "ai");
+  speakText(aiResponse);
 }
 
 function addMessageToChat(text, sender, extraClass = "") {
   const messages = document.getElementById("navi-messages");
   const messageDiv = document.createElement("div");
   messageDiv.className = `navi-message ${sender === "user" ? "navi-user-message" : "navi-ai-message"} ${extraClass}`;
-  if (sender === "ai" && !extraClass) {
-    messageDiv.innerHTML = renderMarkdown(text);
-  } else {
-    messageDiv.textContent = text;
-  }
+  messageDiv.textContent = text;
   messages.appendChild(messageDiv);
   messages.scrollTop = messages.scrollHeight;
 }
