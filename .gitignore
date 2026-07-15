@@ -145,3 +145,10 @@ vite.config.ts.timestamp-*
 config.js
 
 videos/
+
+# WXT build output and generated types
+.output/
+.wxt/
+
+# macOS
+.DS_Store
