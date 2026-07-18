@@ -1,4 +1,12 @@
-import type { EditCellRequest, EditCellResponse } from './messages';
+import type {
+  EditCellRequest,
+  EditCellResponse,
+  GetWorkbookRequest,
+  GetWorkbookResponse,
+  ReadRangeRequest,
+  ReadRangeResponse,
+  SheetTabInfo,
+} from './messages';
 
 /** Wraps chrome.identity.getAuthToken in a promise; prompts sign-in if needed. */
 function getAuthToken(): Promise<string> {
@@ -11,6 +19,69 @@ function getAuthToken(): Promise<string> {
       }
     });
   });
+}
+
+/** Sheet metadata requested for the workbook model (NAVI-007/013/014). */
+const WORKBOOK_FIELDS =
+  'properties.title,sheets(properties(sheetId,title,index,gridProperties(rowCount,columnCount)),charts(chartId,spec(title,basicChart(chartType))))';
+
+/**
+ * Background-side workbook metadata read: title, tabs (with sizes), and
+ * embedded charts — via OAuth, so private sheets work.
+ */
+export async function handleGetWorkbook({
+  spreadsheetId,
+}: GetWorkbookRequest): Promise<GetWorkbookResponse> {
+  try {
+    const token = await getAuthToken();
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=${encodeURIComponent(WORKBOOK_FIELDS)}`;
+
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+
+    if (data.error) return { success: false, error: data.error.message };
+
+    const tabs: SheetTabInfo[] = (data.sheets ?? []).map((sheet: any) => ({
+      sheetId: sheet.properties?.sheetId ?? 0,
+      title: sheet.properties?.title ?? 'Untitled',
+      index: sheet.properties?.index ?? 0,
+      rowCount: sheet.properties?.gridProperties?.rowCount ?? 0,
+      columnCount: sheet.properties?.gridProperties?.columnCount ?? 0,
+      charts: (sheet.charts ?? []).map((chart: any) => ({
+        chartId: chart.chartId ?? 0,
+        title: chart.spec?.title || 'Untitled chart',
+        chartType: chart.spec?.basicChart?.chartType ?? 'CHART',
+      })),
+    }));
+
+    return { success: true, title: data.properties?.title ?? '', tabs };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+/** Background-side range read via OAuth (formatted values). */
+export async function handleReadRange({
+  spreadsheetId,
+  range,
+}: ReadRangeRequest): Promise<ReadRangeResponse> {
+  try {
+    const token = await getAuthToken();
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueRenderOption=FORMATTED_VALUE`;
+
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+
+    if (data.error) return { success: false, error: data.error.message };
+
+    return { success: true, values: data.values ?? [] };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
 }
 
 /**

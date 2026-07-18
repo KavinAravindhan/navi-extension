@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { FontSize, OutputMode } from '@/core/settings/settings';
+import type {
+  ContextScope,
+  FontSize,
+  OutputMode,
+} from '@/core/settings/settings';
 import { NaviMenu, type MenuDeps } from './menu';
 
 describe('NaviMenu', () => {
@@ -9,6 +13,7 @@ describe('NaviMenu', () => {
     greetingEnabled: boolean;
     rate: number;
     outputMode: OutputMode;
+    contextScope: ContextScope;
   };
   let deps: MenuDeps & {
     announce: ReturnType<typeof vi.fn<(text: string) => void>>;
@@ -29,6 +34,7 @@ describe('NaviMenu', () => {
       greetingEnabled: true,
       rate: 1.25,
       outputMode: 'voice',
+      contextScope: 'tab',
     };
     deps = {
       announce: vi.fn<(text: string) => void>(),
@@ -44,6 +50,10 @@ describe('NaviMenu', () => {
       getOutputMode: () => state.outputMode,
       setOutputMode: vi.fn((mode: OutputMode) => {
         state.outputMode = mode;
+      }),
+      getContextScope: () => state.contextScope,
+      setContextScope: vi.fn((scope: ContextScope) => {
+        state.contextScope = scope;
       }),
       onClose: vi.fn<() => void>(),
     };
@@ -71,6 +81,8 @@ describe('NaviMenu', () => {
       'Text size: Extra large',
       'Read out loud: NAVI voice',
       'Read out loud: My screen reader',
+      'AI reads: Current tab only',
+      'AI reads: Entire workbook',
       'Greeting when NAVI opens',
       'Speech speed: 1.25',
       'Close menu',
@@ -79,6 +91,20 @@ describe('NaviMenu', () => {
     expect(itemByLabel('Text size: Large').getAttribute('aria-checked')).toBe('false');
     expect(itemByLabel('Greeting when NAVI opens').getAttribute('aria-checked')).toBe('true');
     expect(itemByLabel('Read out loud: NAVI voice').getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('expanding the AI scope to the whole workbook announces a rescan', () => {
+    menu.show();
+
+    itemByLabel('AI reads: Entire workbook').click();
+
+    expect(deps.setContextScope).toHaveBeenCalledWith('file');
+    expect(deps.announce).toHaveBeenCalledWith(
+      expect.stringContaining('entire workbook'),
+    );
+    expect(
+      itemByLabel('AI reads: Entire workbook').getAttribute('aria-checked'),
+    ).toBe('true');
   });
 
   it('choosing screen-reader output persists it and announces the change', () => {

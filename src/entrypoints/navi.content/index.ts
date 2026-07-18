@@ -12,9 +12,15 @@ import {
 import { Announcer, createLiveRegion } from '@/core/speech/announcer';
 import { SpeechPlayer } from '@/core/speech/speechPlayer';
 import { VoiceRecognition } from '@/core/speech/stt';
+import {
+  buildWorkbookContext,
+  quoteSheetTitle,
+  type TabSection,
+} from '@/core/workbook/model';
 import { getActiveCellA1 } from '@/platform/sheets/activeCell';
 import { requestCellEdit } from '@/platform/sheets/editCell';
-import { readSpreadsheetData } from '@/platform/sheets/readSheet';
+import { getActiveSheetName } from '@/platform/sheets/location';
+import { requestRange, requestWorkbook } from '@/platform/sheets/workbookGateway';
 import { NaviMenu } from '@/ui/menu';
 import { NaviPanel } from '@/ui/panel';
 
@@ -124,6 +130,12 @@ async function initializeNavi(): Promise<void> {
     getSpeechRate: () => player.getRate(),
     getOutputMode: () => settings.outputMode,
     setOutputMode,
+    getContextScope: () => settings.contextScope,
+    setContextScope: (scope) => {
+      settings.contextScope = scope;
+      void saveSettings({ contextScope: scope });
+      void loadSpreadsheetAndSummarize(); // rescan with the new scope
+    },
     onClose: () => {
       if (panel.isOpen) panel.focusInput();
     },
@@ -182,11 +194,46 @@ async function initializeNavi(): Promise<void> {
       'ai',
     );
 
-    const data = await readSpreadsheetData(naviConfig.googleSheetsApiKey);
-    llm.setSpreadsheetContext(data);
+    // All reads go through the user's Google sign-in — private sheets work.
+    const workbook = await requestWorkbook();
+    if (!workbook.success || !workbook.tabs || workbook.tabs.length === 0) {
+      const msg = `I couldn't read this spreadsheet. Please make sure Chrome is signed in to a Google account that can view it. Details: ${workbook.error ?? 'no sheets found'}.`;
+      panel.addMessage(msg, 'ai');
+      speakResponse(msg);
+      summaryStarted = false; // allow retrying by reopening
+      return;
+    }
+
+    const tabs = workbook.tabs;
+    const domTabName = getActiveSheetName();
+    const activeTabTitle =
+      tabs.find((tab) => tab.title === domTabName)?.title ?? tabs[0].title;
+
+    const includedTabs =
+      settings.contextScope === 'file'
+        ? tabs
+        : tabs.filter((tab) => tab.title === activeTabTitle);
+
+    const sections: TabSection[] = [];
+    for (const tab of includedTabs) {
+      const range = await requestRange(quoteSheetTitle(tab.title));
+      sections.push({
+        title: tab.title,
+        values: range.success ? (range.values ?? []) : [],
+      });
+    }
+
+    const context = buildWorkbookContext({
+      workbookTitle: workbook.title ?? 'Untitled workbook',
+      tabs,
+      activeTabTitle,
+      scope: settings.contextScope,
+      sections,
+    });
+    llm.setSpreadsheetContext(context);
 
     const summary = await llm.sendMessage(
-      'Please summarize this spreadsheet for a blind user. Be concise and describe what data is tracked.',
+      'Please summarize this spreadsheet for a blind user. Start with how many tabs the workbook has and what each one is for, then describe the current tab in more detail, including its table heading if one exists. If the data or any charts show a trend, describe the direction and size of the trend in plain language. Be concise.',
     );
 
     panel.addMessage(summary, 'ai');

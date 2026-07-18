@@ -19,7 +19,9 @@ pnpm build
 
 Then load it in Chrome: `chrome://extensions` → enable **Developer mode** → **Load unpacked** → select the `.output/chrome-mv3` folder.
 
-### One-time OAuth setup (needed for cell edits)
+Reading and editing sheets both use your Google sign-in (OAuth), so **private spreadsheets work** — no "anyone with the link" sharing needed, and no Google Sheets API key.
+
+### One-time OAuth setup (needed for reading and cell edits)
 
 The extension ID is pinned to `fojpekkjeokfmckeohalgnmdjcdeejme` (via the `key` field in the manifest), so it is the same on every machine. In **Google Cloud Console → APIs & Services → Credentials → the NAVI OAuth client (Chrome extension)**, set the **Item ID** to that value once. Reading and chat work without this; cell edits need it to authenticate.
 
