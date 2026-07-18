@@ -4,9 +4,15 @@ import { parseEditCommand } from '@/core/commands/editCommand';
 import { TwoStepConfirm } from '@/core/commands/twoStepConfirm';
 import { attachSpeechShortcuts } from '@/core/keyboard/speechShortcuts';
 import { LLMClient } from '@/core/llm/client';
-import { loadSettings, saveSettings } from '@/core/settings/settings';
+import {
+  loadSettings,
+  saveSettings,
+  type OutputMode,
+} from '@/core/settings/settings';
+import { Announcer, createLiveRegion } from '@/core/speech/announcer';
 import { SpeechPlayer } from '@/core/speech/speechPlayer';
 import { VoiceRecognition } from '@/core/speech/stt';
+import { getActiveCellA1 } from '@/platform/sheets/activeCell';
 import { requestCellEdit } from '@/platform/sheets/editCell';
 import { readSpreadsheetData } from '@/platform/sheets/readSheet';
 import { NaviMenu } from '@/ui/menu';
@@ -23,10 +29,10 @@ export default defineContentScript({
 });
 
 /**
- * Composition root. Flow since Step 2: opening NAVI (icon or Alt/Option+N)
- * greets and immediately scans + summarizes the sheet — no font picker, no
- * confirm click (tracker: "voice prompting available on start"). Text size
- * and other preferences live in the Alt/Option+M menu.
+ * Composition root. Output routing (NAVI-002): in voice mode NAVI's own TTS
+ * speaks; in screen-reader mode NAVI stays silent — chat messages announce
+ * through the message log's aria-live and system feedback goes through the
+ * hidden live region — so the user's screen reader is the only voice.
  */
 async function initializeNavi(): Promise<void> {
   console.log('NAVI: Initializing...');
@@ -40,15 +46,24 @@ async function initializeNavi(): Promise<void> {
     onStatusChange: (status) => panel.setPlaybackStatus(status),
   });
 
+  const liveRegion = createLiveRegion(document);
+  const announcer = new Announcer(player, () => settings.outputMode, liveRegion);
+
+  /** Chat responses: voice mode speaks; SR mode lets the live log announce. */
+  const speakResponse = (text: string): void => {
+    if (settings.outputMode === 'voice') player.speak(text);
+  };
+
   const stt = new VoiceRecognition({
     onResult: (transcript) => panel.submitTranscript(transcript),
     onStateChange: (listening) => panel.setVoiceButtonState(listening),
+    // Half-duplex (NAVI-009): the moment we listen, nothing may be speaking.
     onBeforeStart: () => player.stop(),
     onPermissionDenied: () => {
       const msg =
         'Microphone access is blocked. To fix it, click the microphone icon at the right end of the address bar and choose Allow.';
       panel.addMessage(msg, 'ai');
-      player.speak(msg);
+      speakResponse(msg);
     },
   });
 
@@ -63,7 +78,7 @@ async function initializeNavi(): Promise<void> {
       onOpen: () => {
         if (!greeted && settings.greetingEnabled) {
           greeted = true;
-          player.speak("Hi, I'm NAVI.");
+          announcer.say("Hi, I'm NAVI.");
         }
         if (!summaryStarted) {
           summaryStarted = true;
@@ -84,9 +99,17 @@ async function initializeNavi(): Promise<void> {
   );
 
   panel.applyFontSize(settings.fontSize);
+  panel.setOutputMode(settings.outputMode);
+
+  const setOutputMode = (mode: OutputMode): void => {
+    settings.outputMode = mode;
+    panel.setOutputMode(mode);
+    if (mode === 'screenreader') player.stop();
+    void saveSettings({ outputMode: mode });
+  };
 
   const menu = new NaviMenu(panel.getMenuContainer(), {
-    announce: (text) => player.speak(text),
+    announce: (text) => announcer.say(text),
     getFontSize: () => settings.fontSize,
     setFontSize: (size) => {
       settings.fontSize = size;
@@ -99,6 +122,8 @@ async function initializeNavi(): Promise<void> {
       void saveSettings({ greetingEnabled: enabled });
     },
     getSpeechRate: () => player.getRate(),
+    getOutputMode: () => settings.outputMode,
+    setOutputMode,
     onClose: () => {
       if (panel.isOpen) panel.focusInput();
     },
@@ -112,7 +137,7 @@ async function initializeNavi(): Promise<void> {
       void saveSettings({ speechRate: rate });
       // Mid-speech the sentence restarts at the new speed (feedback enough);
       // when idle, say it out loud so the change is never silent.
-      if (player.playbackStatus === 'idle') player.speak(`Speed ${rate}`);
+      if (player.playbackStatus === 'idle') announcer.say(`Speed ${rate}`);
     },
     onOpenNavi: () => panel.open(),
     onOpenMenu: () => {
@@ -124,14 +149,24 @@ async function initializeNavi(): Promise<void> {
       if (quitConfirm.press() === 'prompt') {
         const msg = 'Do you want to close NAVI? Press the shortcut again to confirm.';
         panel.addMessage(msg, 'ai');
-        player.speak(msg);
+        speakResponse(msg);
       } else {
         const msg = 'Closing NAVI. See you next time.';
-        panel.addMessage(msg, 'ai');
         closingForQuit = true; // keep the farewell playing through close
         panel.close();
-        player.speak(msg);
+        announcer.say(msg);
       }
+    },
+    // Ctrl+Alt+Z (NAVI-004): screen reader mode + announce the active cell.
+    onScreenReaderMode: () => {
+      if (!panel.isOpen) panel.open();
+      setOutputMode('screenreader');
+      const cell = getActiveCellA1();
+      announcer.say(
+        cell
+          ? `Screen reader mode on. Active cell ${cell}.`
+          : 'Screen reader mode on.',
+      );
     },
   });
 
@@ -155,7 +190,7 @@ async function initializeNavi(): Promise<void> {
     );
 
     panel.addMessage(summary, 'ai');
-    player.speak(summary);
+    speakResponse(summary);
   }
 
   async function handleUserMessage(text: string): Promise<void> {
@@ -178,17 +213,17 @@ async function initializeNavi(): Promise<void> {
         console.log('NAVI: Cell edited successfully');
         const confirmation = `Done! Cell ${editCommand.cellAddress} has been updated to ${editCommand.newValue}.`;
         panel.addMessage(confirmation, 'ai');
-        player.speak(confirmation);
+        speakResponse(confirmation);
       } else {
         console.error('NAVI: Edit failed:', response.error);
         const errorMsg =
           "Sorry, I couldn't edit that cell. Please make sure you have edit access to this sheet.";
         panel.addMessage(errorMsg, 'ai');
-        player.speak(errorMsg);
+        speakResponse(errorMsg);
       }
     } else {
       panel.addMessage(aiResponse, 'ai');
-      player.speak(aiResponse);
+      speakResponse(aiResponse);
     }
   }
 

@@ -34,6 +34,44 @@ describe('NaviPanel', () => {
     expect(byId('navi-icon').querySelector('img')?.src).toBe(ICON_URL);
   });
 
+  it('exposes the icon as a labelled, focusable button that opens on Enter/Space', () => {
+    const icon = byId('navi-icon');
+    expect(icon.getAttribute('role')).toBe('button');
+    expect(icon.getAttribute('aria-label')).toBe('Open NAVI Assistant');
+    expect(icon.tabIndex).toBe(0);
+
+    icon.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(panel.isOpen).toBe(true);
+  });
+
+  it('is a labelled landmark with accessible controls', () => {
+    const p = byId('navi-panel');
+    expect(p.getAttribute('role')).toBe('complementary');
+    expect(p.getAttribute('aria-label')).toBe('NAVI Assistant');
+    expect(byId('navi-messages').getAttribute('role')).toBe('log');
+    expect(byId('navi-pause-btn').getAttribute('aria-label')).toBe('Pause or resume speech');
+    expect(byId('navi-stop-btn').getAttribute('aria-label')).toBe('Stop speech');
+    expect(byId('navi-close-btn').getAttribute('aria-label')).toBe('Close NAVI');
+    expect(byId('navi-text-input').getAttribute('aria-label')).toBe('Message NAVI');
+    expect(byId('navi-send-btn').getAttribute('aria-label')).toBe('Send message');
+  });
+
+  it('close() returns keyboard focus to the icon', () => {
+    panel.open();
+    panel.close();
+    expect(document.activeElement?.id).toBe('navi-icon');
+  });
+
+  it('setOutputMode drives the live announcement of the message log', () => {
+    expect(byId('navi-messages').getAttribute('aria-live')).toBe('off');
+
+    panel.setOutputMode('screenreader');
+    expect(byId('navi-messages').getAttribute('aria-live')).toBe('polite');
+
+    panel.setOutputMode('voice');
+    expect(byId('navi-messages').getAttribute('aria-live')).toBe('off');
+  });
+
   it('open() goes straight to the chat, fires onOpen, and focuses the input', () => {
     panel.open();
 
@@ -175,11 +213,15 @@ describe('NaviPanel', () => {
     expect(byId('navi-stop-btn').title).toBe('Nothing playing');
   });
 
-  it('reflects listening state on the mic button', () => {
+  it('reflects listening state on the mic button, including aria-pressed', () => {
     panel.setVoiceButtonState(true);
     expect(byId('navi-voice-btn').textContent).toBe('🔴');
+    expect(byId('navi-voice-btn').getAttribute('aria-pressed')).toBe('true');
+    expect(byId('navi-voice-btn').getAttribute('aria-label')).toBe('Stop listening');
 
     panel.setVoiceButtonState(false);
     expect(byId('navi-voice-btn').textContent).toBe('🎙️');
+    expect(byId('navi-voice-btn').getAttribute('aria-pressed')).toBe('false');
+    expect(byId('navi-voice-btn').getAttribute('aria-label')).toBe('Start voice input');
   });
 });

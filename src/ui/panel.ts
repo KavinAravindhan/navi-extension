@@ -1,4 +1,4 @@
-import type { FontSize } from '@/core/settings/settings';
+import type { FontSize, OutputMode } from '@/core/settings/settings';
 import type { PlaybackStatus } from '@/core/speech/speechPlayer';
 import { renderMarkdown } from './markdown';
 
@@ -45,38 +45,47 @@ export class NaviPanel {
     const naviIcon = this.doc.createElement('div');
     naviIcon.id = 'navi-icon';
     naviIcon.title = 'Open NAVI Assistant';
+    // The icon is a real keyboard stop: focusable, labelled, Enter/Space open.
+    naviIcon.setAttribute('role', 'button');
+    naviIcon.setAttribute('aria-label', 'Open NAVI Assistant');
+    naviIcon.tabIndex = 0;
     naviIcon.innerHTML = `
-    <img src="${iconUrl}" style="width: 38px; height: 38px; border-radius: 6px;" alt="NAVI" />
+    <img src="${iconUrl}" style="width: 38px; height: 38px; border-radius: 6px;" alt="" />
   `;
 
     const naviPanel = this.doc.createElement('div');
     naviPanel.id = 'navi-panel';
     naviPanel.style.display = 'none';
+    // A labelled landmark (not a dialog): screen reader users can reach it
+    // without NAVI trapping focus away from the spreadsheet.
+    naviPanel.setAttribute('role', 'complementary');
+    naviPanel.setAttribute('aria-label', 'NAVI Assistant');
     naviPanel.innerHTML = `
     <div id="navi-header">
       <div style="display: flex; align-items: center; gap: 8px;">
-        <img src="${iconUrl}" style="width: 22px; height: 22px; border-radius: 4px;" alt="NAVI" />
+        <img src="${iconUrl}" style="width: 22px; height: 22px; border-radius: 4px;" alt="" />
         <span>NAVI Assistant</span>
       </div>
       <div style="display: flex; gap: 6px; align-items: center;">
-        <button id="navi-pause-btn" title="Nothing playing">⏯️</button>
-        <button id="navi-stop-btn" title="Nothing playing">⏹️</button>
-        <button id="navi-close-btn" title="Close NAVI">✕</button>
+        <button id="navi-pause-btn" title="Nothing playing" aria-label="Pause or resume speech">⏯️</button>
+        <button id="navi-stop-btn" title="Nothing playing" aria-label="Stop speech">⏹️</button>
+        <button id="navi-close-btn" title="Close NAVI" aria-label="Close NAVI">✕</button>
       </div>
     </div>
 
     <div id="navi-menu" style="display: none;"></div>
 
-    <div id="navi-messages"></div>
+    <div id="navi-messages" role="log" aria-live="off" aria-label="Conversation with NAVI"></div>
     <div id="navi-input-area">
       <input
         type="text"
         id="navi-text-input"
         placeholder="Ask NAVI something..."
+        aria-label="Message NAVI"
         autocomplete="off"
       />
-      <button id="navi-voice-btn" title="Click to speak">🎙️</button>
-      <button id="navi-send-btn" title="Send message">➤</button>
+      <button id="navi-voice-btn" title="Click to speak" aria-label="Start voice input" aria-pressed="false">🎙️</button>
+      <button id="navi-send-btn" title="Send message" aria-label="Send message">➤</button>
     </div>
   `;
 
@@ -89,7 +98,15 @@ export class NaviPanel {
   // ------------------------------------------------------------------
 
   private wireEvents(): void {
-    this.byId('navi-icon').addEventListener('click', () => this.open());
+    const icon = this.byId('navi-icon');
+    icon.addEventListener('click', () => this.open());
+    icon.addEventListener('keydown', (event) => {
+      const key = (event as KeyboardEvent).key;
+      if (key === 'Enter' || key === ' ') {
+        event.preventDefault();
+        this.open();
+      }
+    });
     this.byId('navi-close-btn').addEventListener('click', () => this.close());
 
     this.byId('navi-send-btn').addEventListener('click', () => this.handleSend());
@@ -136,8 +153,22 @@ export class NaviPanel {
   /** Closes the panel back to the floating icon and fires onClose. */
   close(): void {
     this.byId('navi-panel').style.display = 'none';
-    this.byId('navi-icon').style.display = 'flex';
+    const icon = this.byId('navi-icon');
+    icon.style.display = 'flex';
+    icon.focus(); // keyboard continuity: focus never vanishes into the page
     this.callbacks.onClose();
+  }
+
+  /**
+   * In screen-reader mode the message log announces itself (aria-live) and
+   * NAVI's own voice stays quiet; in voice mode the log is silent to the
+   * screen reader so users never hear two voices (NAVI-002).
+   */
+  setOutputMode(mode: OutputMode): void {
+    this.byId('navi-messages').setAttribute(
+      'aria-live',
+      mode === 'screenreader' ? 'polite' : 'off',
+    );
   }
 
   get isOpen(): boolean {
@@ -219,6 +250,11 @@ export class NaviPanel {
     if (voiceBtn) {
       voiceBtn.textContent = listening ? '🔴' : '🎙️';
       voiceBtn.title = listening ? 'Listening... click to stop' : 'Click to speak';
+      voiceBtn.setAttribute('aria-pressed', String(listening));
+      voiceBtn.setAttribute(
+        'aria-label',
+        listening ? 'Stop listening' : 'Start voice input',
+      );
     }
   }
 

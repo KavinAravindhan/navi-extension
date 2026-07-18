@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { FontSize } from '@/core/settings/settings';
+import type { FontSize, OutputMode } from '@/core/settings/settings';
 import { NaviMenu, type MenuDeps } from './menu';
 
 describe('NaviMenu', () => {
   let container: HTMLElement;
-  let state: { fontSize: FontSize; greetingEnabled: boolean; rate: number };
+  let state: {
+    fontSize: FontSize;
+    greetingEnabled: boolean;
+    rate: number;
+    outputMode: OutputMode;
+  };
   let deps: MenuDeps & {
     announce: ReturnType<typeof vi.fn<(text: string) => void>>;
     onClose: ReturnType<typeof vi.fn<() => void>>;
@@ -19,7 +24,12 @@ describe('NaviMenu', () => {
   beforeEach(() => {
     document.body.innerHTML = '<div id="navi-menu" style="display: none;"></div>';
     container = document.getElementById('navi-menu')!;
-    state = { fontSize: 'medium', greetingEnabled: true, rate: 1.25 };
+    state = {
+      fontSize: 'medium',
+      greetingEnabled: true,
+      rate: 1.25,
+      outputMode: 'voice',
+    };
     deps = {
       announce: vi.fn<(text: string) => void>(),
       getFontSize: () => state.fontSize,
@@ -31,6 +41,10 @@ describe('NaviMenu', () => {
         state.greetingEnabled = enabled;
       }),
       getSpeechRate: () => state.rate,
+      getOutputMode: () => state.outputMode,
+      setOutputMode: vi.fn((mode: OutputMode) => {
+        state.outputMode = mode;
+      }),
       onClose: vi.fn<() => void>(),
     };
     menu = new NaviMenu(container, deps);
@@ -55,6 +69,8 @@ describe('NaviMenu', () => {
       'Text size: Medium',
       'Text size: Large',
       'Text size: Extra large',
+      'Read out loud: NAVI voice',
+      'Read out loud: My screen reader',
       'Greeting when NAVI opens',
       'Speech speed: 1.25',
       'Close menu',
@@ -62,6 +78,24 @@ describe('NaviMenu', () => {
     expect(itemByLabel('Text size: Medium').getAttribute('aria-checked')).toBe('true');
     expect(itemByLabel('Text size: Large').getAttribute('aria-checked')).toBe('false');
     expect(itemByLabel('Greeting when NAVI opens').getAttribute('aria-checked')).toBe('true');
+    expect(itemByLabel('Read out loud: NAVI voice').getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('choosing screen-reader output persists it and announces the change', () => {
+    menu.show();
+
+    itemByLabel('Read out loud: My screen reader').click();
+
+    expect(deps.setOutputMode).toHaveBeenCalledWith('screenreader');
+    expect(deps.announce).toHaveBeenCalledWith(
+      expect.stringContaining('Screen reader mode on'),
+    );
+    expect(
+      itemByLabel('Read out loud: My screen reader').getAttribute('aria-checked'),
+    ).toBe('true');
+    expect(
+      itemByLabel('Read out loud: NAVI voice').getAttribute('aria-checked'),
+    ).toBe('false');
   });
 
   it('choosing a text size persists it, announces it, and updates the checkmark', () => {
