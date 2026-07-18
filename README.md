@@ -23,6 +23,18 @@ Then load it in Chrome: `chrome://extensions` → enable **Developer mode** → 
 
 The extension ID is pinned to `fojpekkjeokfmckeohalgnmdjcdeejme` (via the `key` field in the manifest), so it is the same on every machine. In **Google Cloud Console → APIs & Services → Credentials → the NAVI OAuth client (Chrome extension)**, set the **Item ID** to that value once. Reading and chat work without this; cell edits need it to authenticate.
 
+## Speech controls
+
+| Action | Keyboard (Mac: Alt = Option ⌥) | Button |
+|---|---|---|
+| Open NAVI (works on Windows/Mac/Linux, even while the sheet has focus; remap at `chrome://extensions/shortcuts`) | **Alt + N** | click the eye icon |
+| Pause / resume (resumes at the current sentence) | tap **Shift** once | ⏯️ |
+| Replay the last message (when nothing is playing) | tap **Shift** once | ⏯️ |
+| Stop completely | tap **Shift** twice quickly | ⏹️ |
+| Speak faster / slower (5 steps, remembered) | **Alt + .** / **Alt + ,** | — |
+
+A clean Shift tap only — Shift held with any other key (normal typing) never triggers playback controls.
+
 ## Development
 
 | Command | What it does |

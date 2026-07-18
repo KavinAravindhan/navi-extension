@@ -279,6 +279,23 @@
   opacity: 1;
 }
 
+/* Pause/resume button — same family as stop */
+#navi-pause-btn {
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
+
+#navi-pause-btn:hover {
+  opacity: 1;
+}
+
 /* Voice and send buttons — black/white */
 #navi-voice-btn,
 #navi-send-btn {
