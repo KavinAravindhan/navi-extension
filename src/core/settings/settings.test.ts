@@ -49,6 +49,11 @@ describe('loadSettings', () => {
     expect(DEFAULT_SETTINGS.sttEngine).toBe('browser');
   });
 
+  it('first-run tour pending and wake word off by default', () => {
+    expect(DEFAULT_SETTINGS.onboardingDone).toBe(false);
+    expect(DEFAULT_SETTINGS.wakeWordEnabled).toBe(false);
+  });
+
   it('falls back to defaults when storage reports an error', async () => {
     chromeMock.runtime.lastError = { message: 'storage unavailable' };
     chromeMock.storage.sync.get.mockImplementation(

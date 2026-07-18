@@ -38,10 +38,13 @@ The extension ID is pinned to `fojpekkjeokfmckeohalgnmdjcdeejme` (via the `key` 
 | Quit NAVI (asks for confirmation, press again to confirm) | **Alt + Q** | ✕ |
 | Screen-reader mode + announce the active cell | **Ctrl + Alt + Z** | via menu |
 | Read what's on the clipboard | **Alt + C** | — |
+| "Hey NAVI" wake word (opt-in, via menu; listens while the panel is closed) | say **"Hey NAVI"** | — |
 
 A clean Shift tap only — Shift held with any other key (normal typing) never triggers playback controls.
 
 Opening NAVI greets you and immediately scans + summarizes the sheet — there is no setup screen. Text size is changed from the menu and remembered.
+
+First launch plays a short spoken tour of the controls (skippable with a double Shift tap, replayable from the menu).
 
 The menu (Alt+M) also switches the **voice** (fast system voice vs natural OpenAI voice), the **microphone** (standard vs Whisper — better accuracy, echo-cancelled, strong Indonesian support), and the **language** (English / Bahasa Indonesia).
 
