@@ -21,11 +21,18 @@ export class VoiceRecognition {
   // TS lib versions, so the instance is intentionally loosely typed.
   private recognition: any = null;
   private listening = false;
+  private lang = 'en-US';
 
   constructor(private readonly options: VoiceRecognitionOptions) {}
 
   get isListening(): boolean {
     return this.listening;
+  }
+
+  /** Switches the recognition language (e.g. 'id-ID') for future listens. */
+  setLanguage(speechLang: string): void {
+    this.lang = speechLang;
+    if (this.recognition) this.recognition.lang = speechLang;
   }
 
   /** Returns false when the browser does not support speech recognition. */
@@ -38,7 +45,7 @@ export class VoiceRecognition {
     }
 
     const recognition = new SpeechRecognitionCtor();
-    recognition.lang = 'en-US';
+    recognition.lang = this.lang;
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 

@@ -40,6 +40,10 @@ describe('loadSettings', () => {
     expect(DEFAULT_SETTINGS.fontSize).toBe('medium');
   });
 
+  it('defaults to English', () => {
+    expect(DEFAULT_SETTINGS.language).toBe('en');
+  });
+
   it('falls back to defaults when storage reports an error', async () => {
     chromeMock.runtime.lastError = { message: 'storage unavailable' };
     chromeMock.storage.sync.get.mockImplementation(

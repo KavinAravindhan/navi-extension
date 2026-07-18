@@ -32,6 +32,8 @@ export class SpeechPlayer {
   private cachedVoice: SpeechSynthesisVoice | null = null;
   /** Remembered so a Shift-tap while idle can replay the last message. */
   private lastText: string | null = null;
+  /** BCP-47 speech tag; switching languages re-picks the voice. */
+  private speechLang = 'en-US';
 
   constructor(
     initialRate = 1.0,
@@ -51,6 +53,13 @@ export class SpeechPlayer {
 
   getRate(): number {
     return this.rate;
+  }
+
+  /** Switches the speaking language (e.g. 'id-ID') and re-picks the voice. */
+  setLanguage(speechLang: string): void {
+    this.speechLang = speechLang;
+    this.cachedVoice = null;
+    this.warmUpVoices();
   }
 
   /** Starts speaking `text` from the beginning, replacing anything queued. */
@@ -132,7 +141,7 @@ export class SpeechPlayer {
     }
 
     const utterance = new SpeechSynthesisUtterance(this.sentences[this.index]);
-    utterance.lang = 'en-US';
+    utterance.lang = this.speechLang;
     utterance.rate = this.rate;
     utterance.pitch = 1;
     utterance.volume = 1;
@@ -211,20 +220,29 @@ export class SpeechPlayer {
     }
   }
 
-  /** v1's preferred-voice list, unchanged. */
+  /** v1's preferred English voices; other languages match by lang prefix. */
   private pickPreferredVoice(): SpeechSynthesisVoice | null {
     const voices = window.speechSynthesis?.getVoices() ?? [];
-    const preferred = [
-      'Google US English',
-      'Google UK English Female',
-      'Google UK English Male',
-      'Microsoft Aria Online (Natural) - English (United States)',
-      'Microsoft Guy Online (Natural) - English (United States)',
-    ];
-    for (const name of preferred) {
-      const match = voices.find((v) => v.name === name);
-      if (match) return match;
+    const langPrefix = this.speechLang.split('-')[0];
+
+    if (langPrefix === 'en') {
+      const preferred = [
+        'Google US English',
+        'Google UK English Female',
+        'Google UK English Male',
+        'Microsoft Aria Online (Natural) - English (United States)',
+        'Microsoft Guy Online (Natural) - English (United States)',
+      ];
+      for (const name of preferred) {
+        const match = voices.find((v) => v.name === name);
+        if (match) return match;
+      }
     }
-    return voices.find((v) => v.lang.startsWith('en') && !v.default) ?? null;
+
+    return (
+      voices.find((v) => v.lang.startsWith(langPrefix) && !v.default) ??
+      voices.find((v) => v.lang.startsWith(langPrefix)) ??
+      null
+    );
   }
 }

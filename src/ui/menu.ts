@@ -1,3 +1,5 @@
+import type { Translate } from '@/core/i18n/i18n';
+import type { Language } from '@/core/i18n/strings';
 import type {
   ContextScope,
   FontSize,
@@ -5,6 +7,8 @@ import type {
 } from '@/core/settings/settings';
 
 export interface MenuDeps {
+  /** Translates UI strings for the current language. */
+  t: Translate;
   /** Speak feedback (routed through the announcer). */
   announce: (text: string) => void;
   getFontSize: () => FontSize;
@@ -16,23 +20,24 @@ export interface MenuDeps {
   setOutputMode: (mode: OutputMode) => void;
   getContextScope: () => ContextScope;
   setContextScope: (scope: ContextScope) => void;
+  getLanguage: () => Language;
+  setLanguage: (language: Language) => void;
   /** Called after the menu closes (controller restores focus). */
   onClose?: () => void;
 }
 
-const FONT_LABELS: Record<FontSize, string> = {
-  small: 'Small',
-  medium: 'Medium',
-  large: 'Large',
-  xlarge: 'Extra large',
-};
-
 const FONT_ORDER: FontSize[] = ['small', 'medium', 'large', 'xlarge'];
+const FONT_LABEL_KEYS = {
+  small: 'sizeSmall',
+  medium: 'sizeMedium',
+  large: 'sizeLarge',
+  xlarge: 'sizeXlarge',
+} as const;
 
 /**
- * The NAVI menu (tracker "[NAVI+m] to access menu"): text size, greeting
- * toggle, and speed info. Fully keyboard-driven — arrows move, Enter
- * activates, Escape closes — and every move is spoken.
+ * The NAVI menu (tracker "[NAVI+m] to access menu"): text size, output mode,
+ * AI scope, language, greeting, and speed info. Fully keyboard-driven —
+ * arrows move, Enter activates, Escape closes — and every move is spoken.
  */
 export class NaviMenu {
   private items: HTMLButtonElement[] = [];
@@ -63,9 +68,7 @@ export class NaviMenu {
   show(): void {
     this.render();
     this.container.style.display = 'flex';
-    this.deps.announce(
-      'Menu opened. Use up and down arrows to move, Enter to choose, Escape to close.',
-    );
+    this.deps.announce(this.deps.t('menuOpened'));
     this.focusItem(0, { silent: true });
   }
 
@@ -80,18 +83,20 @@ export class NaviMenu {
   // ------------------------------------------------------------------
 
   private render(): void {
+    const { t } = this.deps;
     this.container.innerHTML = '';
     this.items = [];
 
-    const current = this.deps.getFontSize();
+    const currentSize = this.deps.getFontSize();
     for (const size of FONT_ORDER) {
+      const sizeLabel = t(FONT_LABEL_KEYS[size]);
       this.addItem({
-        label: `Text size: ${FONT_LABELS[size]}`,
+        label: t('menuTextSize', { size: sizeLabel }),
         role: 'menuitemradio',
-        checked: size === current,
+        checked: size === currentSize,
         onActivate: () => {
           this.deps.setFontSize(size);
-          this.deps.announce(`Text size set to ${FONT_LABELS[size]}.`);
+          this.deps.announce(t('menuTextSizeSet', { size: t(FONT_LABEL_KEYS[size]) }));
           this.refreshChecks();
         },
       });
@@ -99,76 +104,96 @@ export class NaviMenu {
 
     const mode = this.deps.getOutputMode();
     this.addItem({
-      label: 'Read out loud: NAVI voice',
+      label: t('menuVoiceOutput'),
       role: 'menuitemradio',
       checked: mode === 'voice',
       onActivate: () => {
         this.deps.setOutputMode('voice');
-        this.deps.announce('NAVI voice on. NAVI reads responses out loud itself.');
+        this.deps.announce(t('voiceModeOn'));
         this.refreshChecks();
       },
     });
 
     this.addItem({
-      label: 'Read out loud: My screen reader',
+      label: t('menuSrOutput'),
       role: 'menuitemradio',
       checked: mode === 'screenreader',
       onActivate: () => {
         this.deps.setOutputMode('screenreader');
-        this.deps.announce(
-          'Screen reader mode on. NAVI stays silent and your screen reader reads the responses.',
-        );
+        this.deps.announce(t('srOutputOn'));
         this.refreshChecks();
       },
     });
 
     const scope = this.deps.getContextScope();
     this.addItem({
-      label: 'AI reads: Current tab only',
+      label: t('menuScopeTab'),
       role: 'menuitemradio',
       checked: scope === 'tab',
       onActivate: () => {
         this.deps.setContextScope('tab');
-        this.deps.announce('NAVI will read only the current tab. Rescanning now.');
+        this.deps.announce(t('scopeTabOn'));
         this.refreshChecks();
       },
     });
 
     this.addItem({
-      label: 'AI reads: Entire workbook',
+      label: t('menuScopeFile'),
       role: 'menuitemradio',
       checked: scope === 'file',
       onActivate: () => {
         this.deps.setContextScope('file');
-        this.deps.announce('NAVI will read the entire workbook. Rescanning now.');
+        this.deps.announce(t('scopeFileOn'));
+        this.refreshChecks();
+      },
+    });
+
+    const language = this.deps.getLanguage();
+    this.addItem({
+      label: t('menuLanguageEn'),
+      role: 'menuitemradio',
+      checked: language === 'en',
+      onActivate: () => {
+        this.deps.setLanguage('en');
+        // t() is live: the confirmation speaks in the NEW language.
+        this.deps.announce(this.deps.t('languageSet'));
         this.refreshChecks();
       },
     });
 
     this.addItem({
-      label: 'Greeting when NAVI opens',
+      label: t('menuLanguageId'),
+      role: 'menuitemradio',
+      checked: language === 'id',
+      onActivate: () => {
+        this.deps.setLanguage('id');
+        this.deps.announce(this.deps.t('languageSet'));
+        this.refreshChecks();
+      },
+    });
+
+    this.addItem({
+      label: t('menuGreeting'),
       role: 'menuitemcheckbox',
       checked: this.deps.getGreetingEnabled(),
       onActivate: () => {
         const enabled = !this.deps.getGreetingEnabled();
         this.deps.setGreetingEnabled(enabled);
-        this.deps.announce(enabled ? 'Greeting turned on.' : 'Greeting turned off.');
+        this.deps.announce(enabled ? t('greetingOn') : t('greetingOff'));
         this.refreshChecks();
       },
     });
 
     this.addItem({
-      label: `Speech speed: ${this.deps.getSpeechRate()}`,
+      label: t('menuSpeed', { rate: this.deps.getSpeechRate() }),
       role: 'menuitem',
       onActivate: () => {
-        this.deps.announce(
-          `Speech speed is ${this.deps.getSpeechRate()}. Press Alt and period to speed up, Alt and comma to slow down.`,
-        );
+        this.deps.announce(t('menuSpeedInfo', { rate: this.deps.getSpeechRate() }));
       },
     });
 
     this.addItem({
-      label: 'Close menu',
+      label: t('menuClose'),
       role: 'menuitem',
       onActivate: () => this.hide(),
     });
@@ -197,7 +222,7 @@ export class NaviMenu {
     this.items.push(button);
   }
 
-  /** Font/greeting checkmarks change together — re-render in place. */
+  /** Checkmarks (and language labels) change together — re-render in place. */
   private refreshChecks(): void {
     const focused = this.items.findIndex(
       (item) => item === this.container.ownerDocument.activeElement,
@@ -218,7 +243,11 @@ export class NaviMenu {
     const item = this.items[index];
     const checked = item.getAttribute('aria-checked');
     const suffix =
-      checked === 'true' ? ', selected' : checked === 'false' ? ', not selected' : '';
+      checked === 'true'
+        ? this.deps.t('itemSelected')
+        : checked === 'false'
+          ? this.deps.t('itemNotSelected')
+          : '';
     this.deps.announce(`${item.textContent}${suffix}`);
   }
 
