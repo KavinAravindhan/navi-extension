@@ -1,4 +1,8 @@
-import type { FontSize, OutputMode } from '@/core/settings/settings';
+import type {
+  ContextScope,
+  FontSize,
+  OutputMode,
+} from '@/core/settings/settings';
 
 export interface MenuDeps {
   /** Speak feedback (routed through the announcer). */
@@ -10,6 +14,8 @@ export interface MenuDeps {
   getSpeechRate: () => number;
   getOutputMode: () => OutputMode;
   setOutputMode: (mode: OutputMode) => void;
+  getContextScope: () => ContextScope;
+  setContextScope: (scope: ContextScope) => void;
   /** Called after the menu closes (controller restores focus). */
   onClose?: () => void;
 }
@@ -112,6 +118,29 @@ export class NaviMenu {
         this.deps.announce(
           'Screen reader mode on. NAVI stays silent and your screen reader reads the responses.',
         );
+        this.refreshChecks();
+      },
+    });
+
+    const scope = this.deps.getContextScope();
+    this.addItem({
+      label: 'AI reads: Current tab only',
+      role: 'menuitemradio',
+      checked: scope === 'tab',
+      onActivate: () => {
+        this.deps.setContextScope('tab');
+        this.deps.announce('NAVI will read only the current tab. Rescanning now.');
+        this.refreshChecks();
+      },
+    });
+
+    this.addItem({
+      label: 'AI reads: Entire workbook',
+      role: 'menuitemradio',
+      checked: scope === 'file',
+      onActivate: () => {
+        this.deps.setContextScope('file');
+        this.deps.announce('NAVI will read the entire workbook. Rescanning now.');
         this.refreshChecks();
       },
     });

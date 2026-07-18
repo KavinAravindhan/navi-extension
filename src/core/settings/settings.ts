@@ -17,6 +17,9 @@ export type FontSize = 'small' | 'medium' | 'large' | 'xlarge';
  */
 export type OutputMode = 'voice' | 'screenreader';
 
+/** How much of the workbook feeds the AI context (NAVI-010). */
+export type ContextScope = 'tab' | 'file';
+
 export interface NaviSettings {
   /** SpeechSynthesis rate multiplier. */
   speechRate: number;
@@ -26,6 +29,8 @@ export interface NaviSettings {
   fontSize: FontSize;
   /** Voice output vs screen-reader deferral (NAVI-002). */
   outputMode: OutputMode;
+  /** Current tab only (default) vs entire workbook (NAVI-010). */
+  contextScope: ContextScope;
 }
 
 export const DEFAULT_SETTINGS: NaviSettings = {
@@ -33,6 +38,7 @@ export const DEFAULT_SETTINGS: NaviSettings = {
   greetingEnabled: true,
   fontSize: 'medium',
   outputMode: 'voice',
+  contextScope: 'tab',
 };
 
 export function loadSettings(): Promise<NaviSettings> {
