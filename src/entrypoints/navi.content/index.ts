@@ -15,8 +15,11 @@ import {
   type OutputMode,
 } from '@/core/settings/settings';
 import { Announcer, createLiveRegion } from '@/core/speech/announcer';
+import { OpenAITTSEngine } from '@/core/speech/naturalTtsEngine';
 import { SpeechPlayer } from '@/core/speech/speechPlayer';
-import { VoiceRecognition } from '@/core/speech/stt';
+import { VoiceRecognition, type VoiceRecognitionOptions } from '@/core/speech/stt';
+import { WebSpeechEngine } from '@/core/speech/webSpeechEngine';
+import { WhisperRecognition } from '@/core/speech/whisperStt';
 import {
   buildWorkbookContext,
   quoteSheetTitle,
@@ -116,9 +119,16 @@ async function initializeNavi(): Promise<void> {
 
   // ---- Speech ----------------------------------------------------------
 
-  const player = new SpeechPlayer(settings.speechRate, {
-    onStatusChange: (status) => panel.setPlaybackStatus(status),
-  });
+  // Two TTS engines behind one player: the setting picks per sentence, so
+  // switching voices takes effect immediately (NAVI-017).
+  const systemVoice = new WebSpeechEngine(SPEECH_LANG[settings.language]);
+  const naturalVoice = new OpenAITTSEngine(naviConfig.openaiApiKey);
+
+  const player = new SpeechPlayer(
+    settings.speechRate,
+    { onStatusChange: (status) => panel.setPlaybackStatus(status) },
+    () => (settings.voiceEngine === 'natural' ? naturalVoice : systemVoice),
+  );
   player.setLanguage(SPEECH_LANG[settings.language]);
 
   const liveRegion = createLiveRegion(document);
@@ -129,7 +139,8 @@ async function initializeNavi(): Promise<void> {
     if (settings.outputMode === 'voice') player.speak(text);
   };
 
-  const stt = new VoiceRecognition({
+  // Two voice-input engines sharing one set of callbacks (NAVI-009/011).
+  const sttOptions: VoiceRecognitionOptions = {
     onResult: (transcript) => panel.submitTranscript(transcript),
     onStateChange: (listening) => panel.setVoiceButtonState(listening),
     // Half-duplex (NAVI-009): the moment we listen, nothing may be speaking.
@@ -139,8 +150,42 @@ async function initializeNavi(): Promise<void> {
       panel.addMessage(msg, 'ai');
       speakResponse(msg);
     },
-  });
-  stt.setLanguage(SPEECH_LANG[settings.language]);
+    onTranscriptionError: () => {
+      announcer.say(t('transcribeFail'));
+    },
+  };
+
+  const browserStt = new VoiceRecognition(sttOptions);
+  const whisperStt = new WhisperRecognition(naviConfig.openaiApiKey, sttOptions);
+  browserStt.setLanguage(SPEECH_LANG[settings.language]);
+  whisperStt.setLanguage(SPEECH_LANG[settings.language]);
+  const whisperAvailable = whisperStt.init();
+
+  const activeStt = () =>
+    settings.sttEngine === 'whisper' && whisperAvailable ? whisperStt : browserStt;
+
+  const stopListening = (): void => {
+    if (browserStt.isListening) browserStt.toggle();
+    if (whisperStt.isListening) whisperStt.toggle();
+  };
+
+  const toggleVoiceInput = (): void => {
+    void (async () => {
+      // First-time users: warn that Chrome is about to ask for the mic
+      // BEFORE the (visual) permission popup appears (NAVI-011).
+      if (!activeStt().isListening) {
+        try {
+          const status = await navigator.permissions.query({
+            name: 'microphone' as PermissionName,
+          });
+          if (status.state === 'prompt') announcer.say(t('micWillPrompt'));
+        } catch {
+          // permissions API unavailable — proceed silently
+        }
+      }
+      activeStt().toggle();
+    })();
+  };
 
   // ---- Panel + menu ----------------------------------------------------
 
@@ -163,7 +208,7 @@ async function initializeNavi(): Promise<void> {
         }
       },
       onUserMessage: (text) => void handleUserMessage(text),
-      onVoiceToggle: () => stt.toggle(),
+      onVoiceToggle: () => toggleVoiceInput(),
       onPauseToggle: () => player.togglePause(),
       onStop: () => player.stop(),
       onClose: () => {
@@ -215,15 +260,32 @@ async function initializeNavi(): Promise<void> {
       void saveSettings({ language });
       llm.setLanguage(LLM_LANGUAGE_NAME[language]);
       player.setLanguage(SPEECH_LANG[language]);
-      stt.setLanguage(SPEECH_LANG[language]);
+      browserStt.setLanguage(SPEECH_LANG[language]);
+      whisperStt.setLanguage(SPEECH_LANG[language]);
       void loadSpreadsheetAndSummarize(); // re-summarize in the new language
+    },
+    getVoiceEngine: () => settings.voiceEngine,
+    setVoiceEngine: (engine) => {
+      settings.voiceEngine = engine;
+      player.stop(); // next speech starts cleanly on the new engine
+      void saveSettings({ voiceEngine: engine });
+    },
+    getSttEngine: () => settings.sttEngine,
+    setSttEngine: (engine) => {
+      if (engine === 'whisper' && !whisperAvailable) {
+        announcer.say(t('micWhisperUnavailable'));
+        return;
+      }
+      stopListening();
+      settings.sttEngine = engine;
+      void saveSettings({ sttEngine: engine });
     },
     onClose: () => {
       if (panel.isOpen) panel.focusInput();
     },
   });
 
-  stt.init();
+  browserStt.init();
 
   attachSpeechShortcuts(document, player, {
     onRateChange: (rate) => {
@@ -260,6 +322,22 @@ async function initializeNavi(): Promise<void> {
       announcer.say(
         cell ? t('srModeOnWithCell', { cell }) : t('srModeOn'),
       );
+    },
+    // Alt/Option+C (tracker "[NAVI+c]"): announce what's on the clipboard.
+    onClipboard: () => {
+      void (async () => {
+        try {
+          const text = (await navigator.clipboard.readText()).trim();
+          if (!text) {
+            announcer.say(t('clipboardEmpty'));
+            return;
+          }
+          const excerpt = text.length > 300 ? `${text.slice(0, 300)}…` : text;
+          announcer.say(t('clipboardRead', { text: excerpt }));
+        } catch {
+          announcer.say(t('clipboardBlocked'));
+        }
+      })();
     },
   });
 

@@ -1,5 +1,6 @@
 import { cleanTextForSpeech } from './textCleanup';
 import { splitIntoSentences } from './sentences';
+import { WebSpeechEngine } from './webSpeechEngine';
 
 export type PlaybackStatus = 'idle' | 'speaking' | 'paused';
 
@@ -7,40 +8,60 @@ export interface SpeechPlayerEvents {
   onStatusChange?: (status: PlaybackStatus) => void;
 }
 
+export interface SentenceEngineEvents {
+  onEnd: () => void;
+  onError: (error: string) => void;
+}
+
 /**
- * NAVI's text-to-speech engine (replaces v1's single-utterance TextToSpeech).
- *
- * Text is split into sentences and spoken one utterance at a time, which is
- * what makes reliable control possible (NAVI-005):
+ * Speaks ONE sentence at a time. Implementations: WebSpeechEngine (built-in,
+ * instant) and OpenAITTSEngine (natural neural voice, NAVI-017).
+ */
+export interface SentenceEngine {
+  speak(
+    text: string,
+    opts: { rate: number; lang: string },
+    events: SentenceEngineEvents,
+  ): void;
+  cancel(): void;
+}
+
+/**
+ * NAVI's text-to-speech player: splits text into sentences and drives a
+ * SentenceEngine through the queue (NAVI-005):
  * - pause()  cancels the current sentence but keeps the queue position
  * - resume() re-speaks the current sentence from its start
- * - stop()   clears the queue entirely
+ * - stop()   clears the queue entirely; a later toggle replays the last text
  * - setRate() applies immediately by restarting the current sentence
  *
- * Short per-sentence utterances also sidestep Chrome's long-utterance
- * auto-pause bug far better than v1's resume-interval hack did.
+ * The engine is resolved per sentence, so switching the voice setting takes
+ * effect mid-conversation.
  */
 export class SpeechPlayer {
   private sentences: string[] = [];
   private index = 0;
   private status: PlaybackStatus = 'idle';
   private rate: number;
-  /** Identity guard: events from cancelled utterances must be ignored. */
-  private currentUtterance: SpeechSynthesisUtterance | null = null;
-  private resumeInterval: ReturnType<typeof setInterval> | null = null;
-  /** Voice resolved once up-front so the greeting and content match. */
-  private cachedVoice: SpeechSynthesisVoice | null = null;
+  private speechLang = 'en-US';
   /** Remembered so a Shift-tap while idle can replay the last message. */
   private lastText: string | null = null;
-  /** BCP-47 speech tag; switching languages re-picks the voice. */
-  private speechLang = 'en-US';
+  /** Bumped on every cancel — stale engine callbacks are ignored. */
+  private generation = 0;
+  private activeEngine: SentenceEngine | null = null;
+  private readonly getEngine: () => SentenceEngine;
 
   constructor(
     initialRate = 1.0,
     private readonly events: SpeechPlayerEvents = {},
+    engineProvider?: () => SentenceEngine,
   ) {
     this.rate = initialRate;
-    this.warmUpVoices();
+    if (engineProvider) {
+      this.getEngine = engineProvider;
+    } else {
+      const webEngine = new WebSpeechEngine(this.speechLang);
+      this.getEngine = () => webEngine;
+    }
   }
 
   get playbackStatus(): PlaybackStatus {
@@ -55,26 +76,20 @@ export class SpeechPlayer {
     return this.rate;
   }
 
-  /** Switches the speaking language (e.g. 'id-ID') and re-picks the voice. */
+  /** Switches the speaking language (e.g. 'id-ID'); voices follow along. */
   setLanguage(speechLang: string): void {
     this.speechLang = speechLang;
-    this.cachedVoice = null;
-    this.warmUpVoices();
   }
 
   /** Starts speaking `text` from the beginning, replacing anything queued. */
   speak(text: string): void {
-    if (!window.speechSynthesis) {
-      console.warn('NAVI: Text-to-speech is not supported in this browser.');
-      return;
-    }
     if (!text || text.trim() === '') {
       console.warn('NAVI: No text to speak.');
       return;
     }
 
     this.lastText = text;
-    this.cancelCurrentUtterance();
+    this.cancelCurrent();
     this.sentences = splitIntoSentences(cleanTextForSpeech(text));
     this.index = 0;
 
@@ -90,7 +105,7 @@ export class SpeechPlayer {
   /** Pauses after cancelling the current sentence; position is kept. */
   pause(): void {
     if (this.status !== 'speaking') return;
-    this.cancelCurrentUtterance();
+    this.cancelCurrent();
     this.setStatus('paused');
   }
 
@@ -117,7 +132,7 @@ export class SpeechPlayer {
   stop(): void {
     this.sentences = [];
     this.index = 0;
-    this.cancelCurrentUtterance();
+    this.cancelCurrent();
     this.setStatus('idle');
   }
 
@@ -125,7 +140,7 @@ export class SpeechPlayer {
   setRate(rate: number): void {
     this.rate = rate;
     if (this.status === 'speaking') {
-      this.cancelCurrentUtterance();
+      this.cancelCurrent();
       this.speakCurrentSentence();
     }
   }
@@ -140,109 +155,38 @@ export class SpeechPlayer {
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(this.sentences[this.index]);
-    utterance.lang = this.speechLang;
-    utterance.rate = this.rate;
-    utterance.pitch = 1;
-    utterance.volume = 1;
-    if (!this.cachedVoice) this.cachedVoice = this.pickPreferredVoice();
-    if (this.cachedVoice) utterance.voice = this.cachedVoice;
+    const generation = ++this.generation;
+    const engine = this.getEngine();
+    this.activeEngine = engine;
 
-    this.currentUtterance = utterance;
-
-    // Belt-and-braces port of v1's fix for Chrome pausing long utterances.
-    this.clearResumeInterval();
-    this.resumeInterval = setInterval(() => {
-      if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      }
-    }, 10000);
-
-    utterance.onend = () => {
-      if (this.currentUtterance !== utterance) return;
-      this.clearResumeInterval();
-      this.index += 1;
-      this.speakCurrentSentence();
-    };
-
-    utterance.onerror = (event) => {
-      if (this.currentUtterance !== utterance) return;
-      if (event.error === 'interrupted' || event.error === 'canceled') return;
-      console.error('NAVI: Speech error:', event.error);
-      this.clearResumeInterval();
-      this.sentences = [];
-      this.index = 0;
-      this.setStatus('idle');
-    };
-
-    window.speechSynthesis.speak(utterance);
+    engine.speak(
+      this.sentences[this.index],
+      { rate: this.rate, lang: this.speechLang },
+      {
+        onEnd: () => {
+          if (generation !== this.generation) return;
+          this.index += 1;
+          this.speakCurrentSentence();
+        },
+        onError: (error) => {
+          if (generation !== this.generation) return;
+          console.error('NAVI: Speech error:', error);
+          this.sentences = [];
+          this.index = 0;
+          this.setStatus('idle');
+        },
+      },
+    );
   }
 
-  /**
-   * Detaches the current utterance BEFORE cancelling, so the onend/onerror
-   * Chrome fires for the cancelled utterance is ignored by the identity guard.
-   */
-  private cancelCurrentUtterance(): void {
-    this.currentUtterance = null;
-    this.clearResumeInterval();
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
-  }
-
-  private clearResumeInterval(): void {
-    if (this.resumeInterval !== null) {
-      clearInterval(this.resumeInterval);
-      this.resumeInterval = null;
-    }
+  private cancelCurrent(): void {
+    this.generation += 1;
+    this.activeEngine?.cancel();
   }
 
   private setStatus(status: PlaybackStatus): void {
     if (this.status === status) return;
     this.status = status;
     this.events.onStatusChange?.(status);
-  }
-
-  /**
-   * Resolves the preferred voice ONCE, as early as possible. Chrome loads
-   * its voice list asynchronously; without this warm-up the very first
-   * utterance (the greeting) went out with the OS default voice and sounded
-   * different from everything after it.
-   */
-  private warmUpVoices(): void {
-    if (!window.speechSynthesis) return;
-    this.cachedVoice = this.pickPreferredVoice();
-    if (!this.cachedVoice) {
-      window.speechSynthesis.onvoiceschanged = () => {
-        this.cachedVoice = this.pickPreferredVoice();
-        window.speechSynthesis.onvoiceschanged = null;
-      };
-    }
-  }
-
-  /** v1's preferred English voices; other languages match by lang prefix. */
-  private pickPreferredVoice(): SpeechSynthesisVoice | null {
-    const voices = window.speechSynthesis?.getVoices() ?? [];
-    const langPrefix = this.speechLang.split('-')[0];
-
-    if (langPrefix === 'en') {
-      const preferred = [
-        'Google US English',
-        'Google UK English Female',
-        'Google UK English Male',
-        'Microsoft Aria Online (Natural) - English (United States)',
-        'Microsoft Guy Online (Natural) - English (United States)',
-      ];
-      for (const name of preferred) {
-        const match = voices.find((v) => v.name === name);
-        if (match) return match;
-      }
-    }
-
-    return (
-      voices.find((v) => v.lang.startsWith(langPrefix) && !v.default) ??
-      voices.find((v) => v.lang.startsWith(langPrefix)) ??
-      null
-    );
   }
 }
