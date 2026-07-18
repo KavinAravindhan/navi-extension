@@ -7,6 +7,16 @@ export const SPEECH_RATE_STEPS = [0.75, 1.0, 1.25, 1.5, 2.0] as const;
 /** Panel text sizes (NAVI-018) — lives in core so ui and settings agree. */
 export type FontSize = 'small' | 'medium' | 'large' | 'xlarge';
 
+/**
+ * How NAVI's responses reach the user (NAVI-002). Browsers cannot detect
+ * screen readers, so this is an explicit user choice:
+ * - 'voice': NAVI speaks with its own text-to-speech (default)
+ * - 'screenreader': NAVI stays silent and announces through an aria-live
+ *   region, so the user's own screen reader (NVDA/JAWS/VoiceOver) does the
+ *   talking — no more two voices colliding.
+ */
+export type OutputMode = 'voice' | 'screenreader';
+
 export interface NaviSettings {
   /** SpeechSynthesis rate multiplier. */
   speechRate: number;
@@ -14,12 +24,15 @@ export interface NaviSettings {
   greetingEnabled: boolean;
   /** Chat text size; changed from the NAVI menu, persisted (NAVI-018). */
   fontSize: FontSize;
+  /** Voice output vs screen-reader deferral (NAVI-002). */
+  outputMode: OutputMode;
 }
 
 export const DEFAULT_SETTINGS: NaviSettings = {
   speechRate: 1.0,
   greetingEnabled: true,
   fontSize: 'medium',
+  outputMode: 'voice',
 };
 
 export function loadSettings(): Promise<NaviSettings> {

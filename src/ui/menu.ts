@@ -1,13 +1,15 @@
-import type { FontSize } from '@/core/settings/settings';
+import type { FontSize, OutputMode } from '@/core/settings/settings';
 
 export interface MenuDeps {
-  /** Speak feedback (routed to the speech player). */
+  /** Speak feedback (routed through the announcer). */
   announce: (text: string) => void;
   getFontSize: () => FontSize;
   setFontSize: (size: FontSize) => void;
   getGreetingEnabled: () => boolean;
   setGreetingEnabled: (enabled: boolean) => void;
   getSpeechRate: () => number;
+  getOutputMode: () => OutputMode;
+  setOutputMode: (mode: OutputMode) => void;
   /** Called after the menu closes (controller restores focus). */
   onClose?: () => void;
 }
@@ -88,6 +90,31 @@ export class NaviMenu {
         },
       });
     }
+
+    const mode = this.deps.getOutputMode();
+    this.addItem({
+      label: 'Read out loud: NAVI voice',
+      role: 'menuitemradio',
+      checked: mode === 'voice',
+      onActivate: () => {
+        this.deps.setOutputMode('voice');
+        this.deps.announce('NAVI voice on. NAVI reads responses out loud itself.');
+        this.refreshChecks();
+      },
+    });
+
+    this.addItem({
+      label: 'Read out loud: My screen reader',
+      role: 'menuitemradio',
+      checked: mode === 'screenreader',
+      onActivate: () => {
+        this.deps.setOutputMode('screenreader');
+        this.deps.announce(
+          'Screen reader mode on. NAVI stays silent and your screen reader reads the responses.',
+        );
+        this.refreshChecks();
+      },
+    });
 
     this.addItem({
       label: 'Greeting when NAVI opens',

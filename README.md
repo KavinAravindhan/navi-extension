@@ -32,12 +32,15 @@ The extension ID is pinned to `fojpekkjeokfmckeohalgnmdjcdeejme` (via the `key` 
 | Replay the last message (when nothing is playing) | tap **Shift** once | ⏯️ |
 | Stop completely | tap **Shift** twice quickly | ⏹️ |
 | Speak faster / slower (5 steps, remembered) | **Alt + .** / **Alt + ,** | — |
-| Open the NAVI menu (text size, greeting, speed info) | **Alt + M** | — |
+| Open the NAVI menu (text size, output mode, greeting, speed) | **Alt + M** | — |
 | Quit NAVI (asks for confirmation, press again to confirm) | **Alt + Q** | ✕ |
+| Screen-reader mode + announce the active cell | **Ctrl + Alt + Z** | via menu |
 
 A clean Shift tap only — Shift held with any other key (normal typing) never triggers playback controls.
 
 Opening NAVI greets you and immediately scans + summarizes the sheet — there is no setup screen. Text size is changed from the menu and remembered.
+
+**Using a screen reader (NVDA / JAWS / VoiceOver)?** Switch NAVI to screen-reader mode (menu → "Read out loud: My screen reader", or Ctrl+Alt+Z). NAVI then stays silent and your screen reader reads its responses — no two voices talking over each other. The manual screen-reader test script lives in [docs/a11y-testing.md](docs/a11y-testing.md).
 
 ## Development
 

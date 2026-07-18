@@ -108,6 +108,7 @@ describe('attachSpeechShortcuts', () => {
   let onOpenNavi: ReturnType<typeof vi.fn<() => void>>;
   let onQuitNavi: ReturnType<typeof vi.fn<() => void>>;
   let onOpenMenu: ReturnType<typeof vi.fn<() => void>>;
+  let onScreenReaderMode: ReturnType<typeof vi.fn<() => void>>;
 
   beforeEach(() => {
     player = {
@@ -120,6 +121,7 @@ describe('attachSpeechShortcuts', () => {
     onOpenNavi = vi.fn<() => void>();
     onQuitNavi = vi.fn<() => void>();
     onOpenMenu = vi.fn<() => void>();
+    onScreenReaderMode = vi.fn<() => void>();
     // jsdom-dispatched events are never trusted, so tests opt out of the
     // trusted-only guard; the guard itself has its own test below.
     detach = attachSpeechShortcuts(document, player, {
@@ -127,6 +129,7 @@ describe('attachSpeechShortcuts', () => {
       onOpenNavi,
       onQuitNavi,
       onOpenMenu,
+      onScreenReaderMode,
       trustedOnly: false,
     });
   });
@@ -204,6 +207,17 @@ describe('attachSpeechShortcuts', () => {
     dispatch('keydown', { key: 'm', code: 'KeyM' });
     expect(onQuitNavi).not.toHaveBeenCalled();
     expect(onOpenMenu).not.toHaveBeenCalled();
+  });
+
+  it('Ctrl+Alt+Z asks for screen reader mode', () => {
+    dispatch('keydown', { key: 'z', code: 'KeyZ', ctrlKey: true, altKey: true });
+    expect(onScreenReaderMode).toHaveBeenCalledOnce();
+  });
+
+  it('Z with only one modifier does nothing', () => {
+    dispatch('keydown', { key: 'z', code: 'KeyZ', ctrlKey: true });
+    dispatch('keydown', { key: 'z', code: 'KeyZ', altKey: true });
+    expect(onScreenReaderMode).not.toHaveBeenCalled();
   });
 
   it('detach removes the listeners', () => {
