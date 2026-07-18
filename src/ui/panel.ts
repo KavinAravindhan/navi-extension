@@ -1,3 +1,4 @@
+import type { PlaybackStatus } from '@/core/speech/speechPlayer';
 import { renderMarkdown } from './markdown';
 
 export type FontSize = 'small' | 'medium' | 'large' | 'xlarge';
@@ -10,10 +11,14 @@ export interface PanelCallbacks {
   onUserMessage: (text: string) => void;
   /** Mic button clicked. */
   onVoiceToggle: () => void;
+  /** Pause/resume button clicked. */
+  onPauseToggle: () => void;
   /** Stop-speaking button clicked. */
   onStop: () => void;
   /** Panel closed via the ✕ button. */
   onClose: () => void;
+  /** Panel opened via the floating icon (used for the greeting). */
+  onOpen?: () => void;
 }
 
 /**
@@ -57,6 +62,7 @@ export class NaviPanel {
         <span>NAVI Assistant</span>
       </div>
       <div style="display: flex; gap: 6px; align-items: center;">
+        <button id="navi-pause-btn" title="Nothing playing">⏯️</button>
         <button id="navi-stop-btn" title="Nothing playing">⏹️</button>
         <button id="navi-close-btn" title="Close NAVI">✕</button>
       </div>
@@ -98,20 +104,7 @@ export class NaviPanel {
     const naviIcon = this.byId('navi-icon');
     const naviPanel = this.byId('navi-panel');
 
-    naviIcon.addEventListener('click', () => {
-      naviPanel.style.display = 'flex';
-      naviIcon.style.display = 'none';
-
-      if (this.summaryLoaded) {
-        this.byId('navi-font-picker').style.display = 'none';
-        this.byId('navi-messages').style.display = 'flex';
-        this.byId('navi-input-area').style.display = 'flex';
-      } else {
-        this.byId('navi-font-picker').style.display = 'flex';
-        this.byId('navi-messages').style.display = 'none';
-        this.byId('navi-input-area').style.display = 'none';
-      }
-    });
+    naviIcon.addEventListener('click', () => this.open());
 
     this.byId('navi-close-btn').addEventListener('click', () => {
       this.callbacks.onClose();
@@ -145,6 +138,9 @@ export class NaviPanel {
     this.byId('navi-voice-btn').addEventListener('click', () =>
       this.callbacks.onVoiceToggle(),
     );
+    this.byId('navi-pause-btn').addEventListener('click', () =>
+      this.callbacks.onPauseToggle(),
+    );
     this.byId('navi-stop-btn').addEventListener('click', () =>
       this.callbacks.onStop(),
     );
@@ -162,6 +158,29 @@ export class NaviPanel {
   // ------------------------------------------------------------------
   // Public API used by the controller
   // ------------------------------------------------------------------
+
+  /**
+   * Opens the panel (icon click or the Alt/Option+N shortcut) and moves
+   * keyboard focus inside it, per NAVI-001.
+   */
+  open(): void {
+    this.callbacks.onOpen?.();
+
+    this.byId('navi-panel').style.display = 'flex';
+    this.byId('navi-icon').style.display = 'none';
+
+    if (this.summaryLoaded) {
+      this.byId('navi-font-picker').style.display = 'none';
+      this.byId('navi-messages').style.display = 'flex';
+      this.byId('navi-input-area').style.display = 'flex';
+      this.byId('navi-text-input').focus();
+    } else {
+      this.byId('navi-font-picker').style.display = 'flex';
+      this.byId('navi-messages').style.display = 'none';
+      this.byId('navi-input-area').style.display = 'none';
+      this.byId('navi-font-confirm-btn').focus();
+    }
+  }
 
   /** Voice transcript arrives — fill the input and submit it (v1 behavior). */
   submitTranscript(transcript: string): void {
@@ -207,11 +226,25 @@ export class NaviPanel {
     this.summaryLoaded = true;
   }
 
-  setStopButtonState(speaking: boolean): void {
+  /** Drives the pause + stop buttons from the speech player's status. */
+  setPlaybackStatus(status: PlaybackStatus): void {
+    const active = status !== 'idle';
+
+    const pauseBtn = this.doc.getElementById('navi-pause-btn');
+    if (pauseBtn) {
+      pauseBtn.style.opacity = active ? '1' : '0.5';
+      pauseBtn.title =
+        status === 'speaking'
+          ? 'Pause'
+          : status === 'paused'
+            ? 'Resume (paused)'
+            : 'Play / replay last message';
+    }
+
     const stopBtn = this.doc.getElementById('navi-stop-btn');
     if (stopBtn) {
-      stopBtn.style.opacity = speaking ? '1' : '0.5';
-      stopBtn.title = speaking ? 'Stop speaking' : 'Nothing playing';
+      stopBtn.style.opacity = active ? '1' : '0.5';
+      stopBtn.title = active ? 'Stop speaking' : 'Nothing playing';
     }
   }
 

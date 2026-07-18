@@ -3,14 +3,16 @@ import { NaviPanel, type PanelCallbacks } from './panel';
 
 const ICON_URL = 'chrome-extension://test-id/icons/navi_eye_black_bg.png';
 
-function makeCallbacks(): PanelCallbacks {
+function makeCallbacks() {
   return {
     onConfirm: vi.fn(),
     onUserMessage: vi.fn(),
     onVoiceToggle: vi.fn(),
+    onPauseToggle: vi.fn(),
     onStop: vi.fn(),
     onClose: vi.fn(),
-  };
+    onOpen: vi.fn(),
+  } satisfies PanelCallbacks;
 }
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -18,7 +20,7 @@ function byId<T extends HTMLElement>(id: string): T {
 }
 
 describe('NaviPanel', () => {
-  let callbacks: PanelCallbacks;
+  let callbacks: ReturnType<typeof makeCallbacks>;
 
   beforeEach(() => {
     document.body.innerHTML = '';
@@ -117,9 +119,12 @@ describe('NaviPanel', () => {
     expect(byId<HTMLInputElement>('navi-text-input').value).toBe('');
   });
 
-  it('wires the mic, stop, and close buttons to their callbacks', () => {
+  it('wires the mic, pause, stop, and close buttons to their callbacks', () => {
     byId('navi-voice-btn').click();
     expect(callbacks.onVoiceToggle).toHaveBeenCalledOnce();
+
+    byId('navi-pause-btn').click();
+    expect(callbacks.onPauseToggle).toHaveBeenCalledOnce();
 
     byId('navi-stop-btn').click();
     expect(callbacks.onStop).toHaveBeenCalledOnce();
@@ -129,6 +134,11 @@ describe('NaviPanel', () => {
     expect(callbacks.onClose).toHaveBeenCalledOnce();
     expect(byId('navi-panel').style.display).toBe('none');
     expect(byId('navi-icon').style.display).toBe('flex');
+  });
+
+  it('fires onOpen when the panel is opened via the icon', () => {
+    byId('navi-icon').click();
+    expect(callbacks.onOpen).toHaveBeenCalledOnce();
   });
 
   it('renders AI messages as markdown and user messages as plain text', () => {
@@ -168,16 +178,44 @@ describe('NaviPanel', () => {
     expect(document.querySelector('.navi-thinking')).toBeNull();
   });
 
-  it('reflects speaking state on the stop button', () => {
+  it('reflects playback status on the pause and stop buttons', () => {
     const panel = new NaviPanel(ICON_URL, makeCallbacks());
 
-    panel.setStopButtonState(true);
+    panel.setPlaybackStatus('speaking');
+    expect(byId('navi-pause-btn').style.opacity).toBe('1');
+    expect(byId('navi-pause-btn').title).toBe('Pause');
     expect(byId('navi-stop-btn').style.opacity).toBe('1');
     expect(byId('navi-stop-btn').title).toBe('Stop speaking');
 
-    panel.setStopButtonState(false);
+    panel.setPlaybackStatus('paused');
+    expect(byId('navi-pause-btn').title).toBe('Resume (paused)');
+    expect(byId('navi-stop-btn').style.opacity).toBe('1');
+
+    panel.setPlaybackStatus('idle');
+    expect(byId('navi-pause-btn').style.opacity).toBe('0.5');
+    expect(byId('navi-pause-btn').title).toBe('Play / replay last message');
     expect(byId('navi-stop-btn').style.opacity).toBe('0.5');
     expect(byId('navi-stop-btn').title).toBe('Nothing playing');
+  });
+
+  it('open() shows the panel, fires onOpen, and focuses the confirm button first', () => {
+    const panel = new NaviPanel(ICON_URL, callbacks);
+
+    panel.open();
+
+    expect(byId('navi-panel').style.display).toBe('flex');
+    expect(callbacks.onOpen).toHaveBeenCalled();
+    expect(document.activeElement?.id).toBe('navi-font-confirm-btn');
+  });
+
+  it('open() focuses the chat input once the summary has loaded', () => {
+    const panel = new NaviPanel(ICON_URL, callbacks);
+    panel.markSummaryLoaded();
+
+    panel.open();
+
+    expect(byId('navi-messages').style.display).toBe('flex');
+    expect(document.activeElement?.id).toBe('navi-text-input');
   });
 
   it('reflects listening state on the mic button', () => {

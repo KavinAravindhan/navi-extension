@@ -16,6 +16,15 @@ export function installChromeMock() {
     identity: {
       getAuthToken: vi.fn(),
     },
+    storage: {
+      sync: {
+        get: vi.fn(
+          (defaults: Record<string, unknown>, cb: (items: Record<string, unknown>) => void) =>
+            cb({ ...defaults }),
+        ),
+        set: vi.fn((_items: Record<string, unknown>, cb?: () => void) => cb?.()),
+      },
+    },
   };
   vi.stubGlobal('chrome', chromeMock);
   return chromeMock;

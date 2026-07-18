@@ -15,3 +15,11 @@ export interface EditCellResponse {
   success: boolean;
   error?: string;
 }
+
+// Sent from the background worker to the content script when the user
+// presses the browser-level open-NAVI shortcut (chrome.commands).
+export const OPEN_NAVI_ACTION = 'openNavi' as const;
+
+export interface OpenNaviMessage {
+  action: typeof OPEN_NAVI_ACTION;
+}

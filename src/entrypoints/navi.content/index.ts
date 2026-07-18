@@ -1,9 +1,11 @@
 import './style.css';
 import { naviConfig, warnOnMissingConfig } from '@/config';
 import { parseEditCommand } from '@/core/commands/editCommand';
+import { attachSpeechShortcuts } from '@/core/keyboard/speechShortcuts';
 import { LLMClient } from '@/core/llm/client';
+import { loadSettings, saveSettings } from '@/core/settings/settings';
+import { SpeechPlayer } from '@/core/speech/speechPlayer';
 import { VoiceRecognition } from '@/core/speech/stt';
-import { TextToSpeech } from '@/core/speech/tts';
 import { requestCellEdit } from '@/platform/sheets/editCell';
 import { readSpreadsheetData } from '@/platform/sheets/readSheet';
 import { NaviPanel } from '@/ui/panel';
@@ -14,40 +16,66 @@ export default defineContentScript({
   cssInjectionMode: 'manifest',
   main() {
     // Same 3s delay as v1 — gives the Google Sheets UI time to finish rendering.
-    setTimeout(initializeNavi, 3000);
+    setTimeout(() => void initializeNavi(), 3000);
   },
 });
 
 /**
  * Composition root: builds the services, the panel, and the glue between
- * them. All flows and user-facing strings are ported verbatim from v1.
+ * them. Chat/scan/edit flows are unchanged from v1; speech now runs through
+ * the sentence-queue SpeechPlayer with keyboard controls (NAVI-005/006/008):
+ * Shift = pause/resume, double-Shift = stop, Alt+. / Alt+, = speed.
  */
-function initializeNavi(): void {
+async function initializeNavi(): Promise<void> {
   console.log('NAVI: Initializing...');
   warnOnMissingConfig();
 
+  const settings = await loadSettings();
+
   const llm = new LLMClient(naviConfig.openaiApiKey);
 
-  const tts = new TextToSpeech((speaking) => panel.setStopButtonState(speaking));
+  const player = new SpeechPlayer(settings.speechRate, {
+    onStatusChange: (status) => panel.setPlaybackStatus(status),
+  });
 
   const stt = new VoiceRecognition({
     onResult: (transcript) => panel.submitTranscript(transcript),
     onStateChange: (listening) => panel.setVoiceButtonState(listening),
-    onBeforeStart: () => tts.stop(),
+    onBeforeStart: () => player.stop(),
   });
+
+  let greeted = false;
 
   const panel = new NaviPanel(
     chrome.runtime.getURL('icons/navi_eye_black_bg.png'),
     {
+      onOpen: () => {
+        if (!greeted && settings.greetingEnabled) {
+          greeted = true;
+          player.speak("Hi, I'm NAVI.");
+        }
+      },
       onConfirm: () => void loadSpreadsheetAndSummarize(),
       onUserMessage: (text) => void handleUserMessage(text),
       onVoiceToggle: () => stt.toggle(),
-      onStop: () => tts.stop(),
-      onClose: () => tts.stop(),
+      onPauseToggle: () => player.togglePause(),
+      onStop: () => player.stop(),
+      onClose: () => player.stop(),
     },
   );
 
   stt.init();
+
+  attachSpeechShortcuts(document, player, {
+    onRateChange: (rate) => void saveSettings({ speechRate: rate }),
+    onOpenNavi: () => panel.open(),
+  });
+
+  // Browser-level open shortcut, forwarded by the background worker —
+  // reaches us even when Google Sheets has trapped in-page keyboard focus.
+  chrome.runtime.onMessage.addListener((message: { action?: string }) => {
+    if (message?.action === 'openNavi') panel.open();
+  });
 
   async function loadSpreadsheetAndSummarize(): Promise<void> {
     panel.addMessage(
@@ -63,13 +91,13 @@ function initializeNavi(): void {
     );
 
     panel.addMessage(summary, 'ai');
-    tts.speak(summary);
+    player.speak(summary);
 
     panel.markSummaryLoaded();
   }
 
   async function handleUserMessage(text: string): Promise<void> {
-    tts.stop();
+    player.stop();
 
     panel.addMessage(text, 'user');
     panel.addMessage('Thinking...', 'ai', 'navi-thinking');
@@ -88,17 +116,17 @@ function initializeNavi(): void {
         console.log('NAVI: Cell edited successfully');
         const confirmation = `Done! Cell ${editCommand.cellAddress} has been updated to ${editCommand.newValue}.`;
         panel.addMessage(confirmation, 'ai');
-        tts.speak(confirmation);
+        player.speak(confirmation);
       } else {
         console.error('NAVI: Edit failed:', response.error);
         const errorMsg =
           "Sorry, I couldn't edit that cell. Please make sure you have edit access to this sheet.";
         panel.addMessage(errorMsg, 'ai');
-        tts.speak(errorMsg);
+        player.speak(errorMsg);
       }
     } else {
       panel.addMessage(aiResponse, 'ai');
-      tts.speak(aiResponse);
+      player.speak(aiResponse);
     }
   }
 
