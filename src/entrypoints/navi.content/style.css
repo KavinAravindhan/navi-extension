@@ -89,85 +89,40 @@
 }
 
 /* ========================================================
-   FONT SIZE PICKER
+   NAVI MENU (Alt/Option+M)
    ======================================================== */
 
-#navi-font-picker {
-  flex: 1;
-  display: flex;
+#navi-menu {
+  display: none;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  padding: 24px;
-  background-color: #000000;
+  gap: 6px;
+  padding: 12px 16px;
+  background-color: #0a0a0a;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-#navi-font-picker-label {
-  font-size: 15px;
-  color: rgba(255, 255, 255, 0.85);
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  text-align: center;
-}
-
-#navi-font-buttons {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-}
-
-.navi-font-btn {
+.navi-menu-item {
   background-color: #111111;
-  border: 2px solid rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   color: #ffffff;
-  border-radius: 10px;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  text-align: left;
   cursor: pointer;
-  font-weight: bold;
-  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.1s ease;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
-.navi-font-btn:nth-child(1) { font-size: 13px; width: 40px; height: 40px; }
-.navi-font-btn:nth-child(2) { font-size: 17px; width: 46px; height: 46px; }
-.navi-font-btn:nth-child(3) { font-size: 22px; width: 52px; height: 52px; }
-.navi-font-btn:nth-child(4) { font-size: 28px; width: 58px; height: 58px; }
-
-.navi-font-btn:hover {
+.navi-menu-item:hover,
+.navi-menu-item:focus {
   border-color: #ffffff;
   background-color: #222222;
-  transform: scale(1.05);
+  outline: none;
 }
 
-.navi-font-btn.navi-font-selected {
-  border-color: #ffffff;
+.navi-menu-item[aria-checked='true'] {
   background-color: #333333;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15);
-}
-
-#navi-font-confirm-btn {
-  background-color: #ffffff;
-  border: 2px solid #ffffff;
-  color: #000000;
-  font-size: 14px;
-  font-weight: 700;
-  padding: 12px 24px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.1s ease;
-  letter-spacing: 0.3px;
-}
-
-#navi-font-confirm-btn:hover {
-  background-color: #dddddd;
-  transform: scale(1.03);
-}
-
-#navi-font-confirm-btn:active {
-  transform: scale(0.97);
+  border-color: #ffffff;
 }
 
 /* ========================================================

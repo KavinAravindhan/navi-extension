@@ -1,12 +1,11 @@
+import type { FontSize } from '@/core/settings/settings';
 import type { PlaybackStatus } from '@/core/speech/speechPlayer';
 import { renderMarkdown } from './markdown';
 
-export type FontSize = 'small' | 'medium' | 'large' | 'xlarge';
+export type { FontSize };
 export type MessageSender = 'user' | 'ai';
 
 export interface PanelCallbacks {
-  /** Font size confirmed — controller should scan + summarize the sheet. */
-  onConfirm: (fontSize: FontSize) => void;
   /** A non-empty chat message was submitted (send button, Enter, or voice). */
   onUserMessage: (text: string) => void;
   /** Mic button clicked. */
@@ -15,22 +14,20 @@ export interface PanelCallbacks {
   onPauseToggle: () => void;
   /** Stop-speaking button clicked. */
   onStop: () => void;
-  /** Panel closed via the ✕ button. */
+  /** Panel closed (✕ button, quit shortcut, or close()). */
   onClose: () => void;
-  /** Panel opened via the floating icon (used for the greeting). */
+  /** Panel opened (icon click, Alt/Option+N, or open()). */
   onOpen?: () => void;
 }
 
 /**
- * NAVI's floating icon + chat panel. All HTML, ids, and classes are ported
- * verbatim from v1 (content.js §5–6) so styles.css keeps working unchanged;
- * external actions are injected as callbacks instead of reaching into
- * globals.
+ * NAVI's floating icon + chat panel.
+ *
+ * Since Step 2 the panel opens straight into the chat — the v1 font-picker
+ * gate is gone (tester feedback: a mandatory visual step blocks BVI users).
+ * Text size is a persisted setting changed from the NAVI menu instead.
  */
 export class NaviPanel {
-  private selectedFontSize: FontSize = 'medium';
-  private summaryLoaded = false;
-
   constructor(
     iconUrl: string,
     private readonly callbacks: PanelCallbacks,
@@ -41,7 +38,7 @@ export class NaviPanel {
   }
 
   // ------------------------------------------------------------------
-  // DOM construction (verbatim from v1 createNaviUI)
+  // DOM construction
   // ------------------------------------------------------------------
 
   private buildDom(iconUrl: string): void {
@@ -68,19 +65,10 @@ export class NaviPanel {
       </div>
     </div>
 
-    <div id="navi-font-picker">
-      <span id="navi-font-picker-label">Choose your text size:</span>
-      <div id="navi-font-buttons">
-        <button class="navi-font-btn" data-size="small">A</button>
-        <button class="navi-font-btn navi-font-selected" data-size="medium">A</button>
-        <button class="navi-font-btn" data-size="large">A</button>
-        <button class="navi-font-btn" data-size="xlarge">A</button>
-      </div>
-      <button id="navi-font-confirm-btn">Confirm & Load Sheet ➤</button>
-    </div>
+    <div id="navi-menu" style="display: none;"></div>
 
-    <div id="navi-messages" style="display: none;"></div>
-    <div id="navi-input-area" style="display: none;">
+    <div id="navi-messages"></div>
+    <div id="navi-input-area">
       <input
         type="text"
         id="navi-text-input"
@@ -97,37 +85,12 @@ export class NaviPanel {
   }
 
   // ------------------------------------------------------------------
-  // Event wiring (verbatim behavior from v1 setupUIEventListeners)
+  // Event wiring
   // ------------------------------------------------------------------
 
   private wireEvents(): void {
-    const naviIcon = this.byId('navi-icon');
-    const naviPanel = this.byId('navi-panel');
-
-    naviIcon.addEventListener('click', () => this.open());
-
-    this.byId('navi-close-btn').addEventListener('click', () => {
-      this.callbacks.onClose();
-      naviPanel.style.display = 'none';
-      naviIcon.style.display = 'flex';
-    });
-
-    const fontButtons = naviPanel.querySelectorAll<HTMLButtonElement>('.navi-font-btn');
-    fontButtons.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        fontButtons.forEach((b) => b.classList.remove('navi-font-selected'));
-        btn.classList.add('navi-font-selected');
-        this.selectedFontSize = btn.dataset.size as FontSize;
-      });
-    });
-
-    this.byId('navi-font-confirm-btn').addEventListener('click', () => {
-      this.byId('navi-font-picker').style.display = 'none';
-      this.byId('navi-messages').style.display = 'flex';
-      this.byId('navi-input-area').style.display = 'flex';
-      this.applyFontSize(this.selectedFontSize);
-      this.callbacks.onConfirm(this.selectedFontSize);
-    });
+    this.byId('navi-icon').addEventListener('click', () => this.open());
+    this.byId('navi-close-btn').addEventListener('click', () => this.close());
 
     this.byId('navi-send-btn').addEventListener('click', () => this.handleSend());
 
@@ -160,26 +123,34 @@ export class NaviPanel {
   // ------------------------------------------------------------------
 
   /**
-   * Opens the panel (icon click or the Alt/Option+N shortcut) and moves
-   * keyboard focus inside it, per NAVI-001.
+   * Opens the panel straight into the chat and moves keyboard focus to the
+   * input (NAVI-001). Fires onOpen so the controller can greet + auto-scan.
    */
   open(): void {
     this.callbacks.onOpen?.();
-
     this.byId('navi-panel').style.display = 'flex';
     this.byId('navi-icon').style.display = 'none';
+    this.focusInput();
+  }
 
-    if (this.summaryLoaded) {
-      this.byId('navi-font-picker').style.display = 'none';
-      this.byId('navi-messages').style.display = 'flex';
-      this.byId('navi-input-area').style.display = 'flex';
-      this.byId('navi-text-input').focus();
-    } else {
-      this.byId('navi-font-picker').style.display = 'flex';
-      this.byId('navi-messages').style.display = 'none';
-      this.byId('navi-input-area').style.display = 'none';
-      this.byId('navi-font-confirm-btn').focus();
-    }
+  /** Closes the panel back to the floating icon and fires onClose. */
+  close(): void {
+    this.byId('navi-panel').style.display = 'none';
+    this.byId('navi-icon').style.display = 'flex';
+    this.callbacks.onClose();
+  }
+
+  get isOpen(): boolean {
+    return this.byId('navi-panel').style.display === 'flex';
+  }
+
+  focusInput(): void {
+    this.byId<HTMLInputElement>('navi-text-input').focus();
+  }
+
+  /** The container the NaviMenu renders into. */
+  getMenuContainer(): HTMLElement {
+    return this.byId('navi-menu');
   }
 
   /** Voice transcript arrives — fill the input and submit it (v1 behavior). */
@@ -219,11 +190,6 @@ export class NaviPanel {
       'navi-font-xlarge',
     );
     messages.classList.add(`navi-font-${size}`);
-  }
-
-  /** After the first summary, reopening the panel skips the font picker. */
-  markSummaryLoaded(): void {
-    this.summaryLoaded = true;
   }
 
   /** Drives the pause + stop buttons from the speech player's status. */

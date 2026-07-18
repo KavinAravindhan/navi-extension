@@ -5,6 +5,11 @@ export interface VoiceRecognitionOptions {
   onStateChange?: (listening: boolean) => void;
   /** Called right before listening starts (v1 used this to stop TTS). */
   onBeforeStart?: () => void;
+  /**
+   * Called when the browser blocks microphone access, so NAVI can speak
+   * recovery instructions instead of failing silently (NAVI-011).
+   */
+  onPermissionDenied?: () => void;
 }
 
 /**
@@ -50,6 +55,9 @@ export class VoiceRecognition {
     recognition.onerror = (event: any) => {
       console.error('NAVI: Voice recognition error:', event.error);
       this.setListening(false);
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        this.options.onPermissionDenied?.();
+      }
     };
 
     this.recognition = recognition;

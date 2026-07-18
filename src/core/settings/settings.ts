@@ -4,16 +4,22 @@
 /** Speech-rate steps from the tracker spec (NAVI-006). */
 export const SPEECH_RATE_STEPS = [0.75, 1.0, 1.25, 1.5, 2.0] as const;
 
+/** Panel text sizes (NAVI-018) — lives in core so ui and settings agree. */
+export type FontSize = 'small' | 'medium' | 'large' | 'xlarge';
+
 export interface NaviSettings {
   /** SpeechSynthesis rate multiplier. */
   speechRate: number;
   /** Speak "Hi, I'm NAVI." when the panel opens (NAVI-008). */
   greetingEnabled: boolean;
+  /** Chat text size; changed from the NAVI menu, persisted (NAVI-018). */
+  fontSize: FontSize;
 }
 
 export const DEFAULT_SETTINGS: NaviSettings = {
   speechRate: 1.0,
   greetingEnabled: true,
+  fontSize: 'medium',
 };
 
 export function loadSettings(): Promise<NaviSettings> {

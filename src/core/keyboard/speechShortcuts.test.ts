@@ -106,6 +106,8 @@ describe('attachSpeechShortcuts', () => {
   let detach: () => void;
   let onRateChange: ReturnType<typeof vi.fn<(rate: number) => void>>;
   let onOpenNavi: ReturnType<typeof vi.fn<() => void>>;
+  let onQuitNavi: ReturnType<typeof vi.fn<() => void>>;
+  let onOpenMenu: ReturnType<typeof vi.fn<() => void>>;
 
   beforeEach(() => {
     player = {
@@ -116,11 +118,15 @@ describe('attachSpeechShortcuts', () => {
     };
     onRateChange = vi.fn<(rate: number) => void>();
     onOpenNavi = vi.fn<() => void>();
+    onQuitNavi = vi.fn<() => void>();
+    onOpenMenu = vi.fn<() => void>();
     // jsdom-dispatched events are never trusted, so tests opt out of the
     // trusted-only guard; the guard itself has its own test below.
     detach = attachSpeechShortcuts(document, player, {
       onRateChange,
       onOpenNavi,
+      onQuitNavi,
+      onOpenMenu,
       trustedOnly: false,
     });
   });
@@ -181,6 +187,23 @@ describe('attachSpeechShortcuts', () => {
   it('N without Alt does not open NAVI', () => {
     dispatch('keydown', { key: 'n', code: 'KeyN' });
     expect(onOpenNavi).not.toHaveBeenCalled();
+  });
+
+  it('Alt+Q asks to quit NAVI', () => {
+    dispatch('keydown', { key: 'q', code: 'KeyQ', altKey: true });
+    expect(onQuitNavi).toHaveBeenCalledOnce();
+  });
+
+  it('Alt+M asks to open the menu', () => {
+    dispatch('keydown', { key: 'm', code: 'KeyM', altKey: true });
+    expect(onOpenMenu).toHaveBeenCalledOnce();
+  });
+
+  it('Q and M without Alt do nothing', () => {
+    dispatch('keydown', { key: 'q', code: 'KeyQ' });
+    dispatch('keydown', { key: 'm', code: 'KeyM' });
+    expect(onQuitNavi).not.toHaveBeenCalled();
+    expect(onOpenMenu).not.toHaveBeenCalled();
   });
 
   it('detach removes the listeners', () => {
