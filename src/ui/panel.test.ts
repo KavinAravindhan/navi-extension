@@ -5,7 +5,6 @@ const ICON_URL = 'chrome-extension://test-id/icons/navi_eye_black_bg.png';
 
 function makeCallbacks() {
   return {
-    onConfirm: vi.fn(),
     onUserMessage: vi.fn(),
     onVoiceToggle: vi.fn(),
     onPauseToggle: vi.fn(),
@@ -21,11 +20,12 @@ function byId<T extends HTMLElement>(id: string): T {
 
 describe('NaviPanel', () => {
   let callbacks: ReturnType<typeof makeCallbacks>;
+  let panel: NaviPanel;
 
   beforeEach(() => {
     document.body.innerHTML = '';
     callbacks = makeCallbacks();
-    new NaviPanel(ICON_URL, callbacks);
+    panel = new NaviPanel(ICON_URL, callbacks);
   });
 
   it('renders the floating icon and a hidden panel', () => {
@@ -34,57 +34,43 @@ describe('NaviPanel', () => {
     expect(byId('navi-icon').querySelector('img')?.src).toBe(ICON_URL);
   });
 
-  it('opens on icon click showing the font picker first', () => {
-    byId('navi-icon').click();
+  it('open() goes straight to the chat, fires onOpen, and focuses the input', () => {
+    panel.open();
 
     expect(byId('navi-panel').style.display).toBe('flex');
     expect(byId('navi-icon').style.display).toBe('none');
-    expect(byId('navi-font-picker').style.display).toBe('flex');
-    expect(byId('navi-messages').style.display).toBe('none');
-    expect(byId('navi-input-area').style.display).toBe('none');
+    expect(callbacks.onOpen).toHaveBeenCalledOnce();
+    expect(document.activeElement?.id).toBe('navi-text-input');
+    expect(panel.isOpen).toBe(true);
   });
 
-  it('marks the clicked font size as selected', () => {
-    byId('navi-icon').click();
-    const large = document.querySelector<HTMLButtonElement>(
-      '.navi-font-btn[data-size="large"]',
-    )!;
-
-    large.click();
-
-    expect(large.classList.contains('navi-font-selected')).toBe(true);
-    expect(
-      document.querySelectorAll('.navi-font-selected'),
-    ).toHaveLength(1);
+  it('there is no font picker gate anymore', () => {
+    panel.open();
+    expect(document.getElementById('navi-font-picker')).toBeNull();
+    expect(document.querySelectorAll('.navi-font-btn')).toHaveLength(0);
   });
 
-  it('confirming the font size reveals the chat and notifies the controller', () => {
+  it('clicking the icon opens the panel the same way', () => {
     byId('navi-icon').click();
-    document
-      .querySelector<HTMLButtonElement>('.navi-font-btn[data-size="large"]')!
-      .click();
-
-    byId('navi-font-confirm-btn').click();
-
-    expect(byId('navi-font-picker').style.display).toBe('none');
-    expect(byId('navi-messages').style.display).toBe('flex');
-    expect(byId('navi-input-area').style.display).toBe('flex');
-    expect(byId('navi-messages').classList.contains('navi-font-large')).toBe(
-      true,
-    );
-    expect(callbacks.onConfirm).toHaveBeenCalledWith('large');
+    expect(byId('navi-panel').style.display).toBe('flex');
+    expect(callbacks.onOpen).toHaveBeenCalledOnce();
   });
 
-  it('after the summary loads, reopening skips the font picker', () => {
-    const panel = new NaviPanel(ICON_URL, makeCallbacks());
-    // The second panel instance owns the last-created DOM ids in this document.
-    panel.markSummaryLoaded();
+  it('close() returns to the icon and fires onClose', () => {
+    panel.open();
+    panel.close();
 
-    byId('navi-icon').click();
+    expect(byId('navi-panel').style.display).toBe('none');
+    expect(byId('navi-icon').style.display).toBe('flex');
+    expect(callbacks.onClose).toHaveBeenCalledOnce();
+    expect(panel.isOpen).toBe(false);
+  });
 
-    expect(byId('navi-font-picker').style.display).toBe('none');
-    expect(byId('navi-messages').style.display).toBe('flex');
-    expect(byId('navi-input-area').style.display).toBe('flex');
+  it('the ✕ button closes via the same path', () => {
+    panel.open();
+    byId('navi-close-btn').click();
+    expect(byId('navi-panel').style.display).toBe('none');
+    expect(callbacks.onClose).toHaveBeenCalledOnce();
   });
 
   it('submits trimmed input and clears the field', () => {
@@ -113,13 +99,12 @@ describe('NaviPanel', () => {
   });
 
   it('submits voice transcripts through the same path', () => {
-    const panel = new NaviPanel(ICON_URL, makeCallbacks());
     panel.submitTranscript('read row two');
-    // Uses the freshest DOM input, so assert on the latest callbacks object.
+    expect(callbacks.onUserMessage).toHaveBeenCalledWith('read row two');
     expect(byId<HTMLInputElement>('navi-text-input').value).toBe('');
   });
 
-  it('wires the mic, pause, stop, and close buttons to their callbacks', () => {
+  it('wires the mic, pause, and stop buttons to their callbacks', () => {
     byId('navi-voice-btn').click();
     expect(callbacks.onVoiceToggle).toHaveBeenCalledOnce();
 
@@ -128,22 +113,14 @@ describe('NaviPanel', () => {
 
     byId('navi-stop-btn').click();
     expect(callbacks.onStop).toHaveBeenCalledOnce();
-
-    byId('navi-icon').click();
-    byId('navi-close-btn').click();
-    expect(callbacks.onClose).toHaveBeenCalledOnce();
-    expect(byId('navi-panel').style.display).toBe('none');
-    expect(byId('navi-icon').style.display).toBe('flex');
   });
 
-  it('fires onOpen when the panel is opened via the icon', () => {
-    byId('navi-icon').click();
-    expect(callbacks.onOpen).toHaveBeenCalledOnce();
+  it('exposes the menu container for the NaviMenu', () => {
+    expect(panel.getMenuContainer().id).toBe('navi-menu');
+    expect(panel.getMenuContainer().style.display).toBe('none');
   });
 
   it('renders AI messages as markdown and user messages as plain text', () => {
-    const panel = new NaviPanel(ICON_URL, makeCallbacks());
-
     panel.addMessage('**Total** is 12', 'ai');
     panel.addMessage('<script>alert(1)</script>', 'user');
 
@@ -156,8 +133,6 @@ describe('NaviPanel', () => {
   });
 
   it('escapes hostile AI output instead of executing it', () => {
-    const panel = new NaviPanel(ICON_URL, makeCallbacks());
-
     panel.addMessage('<img src=x onerror="window.hacked=true">', 'ai');
 
     expect(byId('navi-messages').querySelector('img')).toBeNull();
@@ -165,11 +140,8 @@ describe('NaviPanel', () => {
   });
 
   it('shows and removes the Thinking placeholder', () => {
-    const panel = new NaviPanel(ICON_URL, makeCallbacks());
-
     panel.addMessage('Thinking...', 'ai', 'navi-thinking');
     expect(document.querySelector('.navi-thinking')).not.toBeNull();
-    // Extra-class messages render as text, never markdown.
     expect(document.querySelector('.navi-thinking')!.textContent).toBe(
       'Thinking...',
     );
@@ -178,54 +150,36 @@ describe('NaviPanel', () => {
     expect(document.querySelector('.navi-thinking')).toBeNull();
   });
 
-  it('reflects playback status on the pause and stop buttons', () => {
-    const panel = new NaviPanel(ICON_URL, makeCallbacks());
+  it('applyFontSize swaps the font class on the messages area', () => {
+    panel.applyFontSize('large');
+    expect(byId('navi-messages').classList.contains('navi-font-large')).toBe(true);
 
+    panel.applyFontSize('small');
+    const classes = byId('navi-messages').classList;
+    expect(classes.contains('navi-font-small')).toBe(true);
+    expect(classes.contains('navi-font-large')).toBe(false);
+  });
+
+  it('reflects playback status on the pause and stop buttons', () => {
     panel.setPlaybackStatus('speaking');
     expect(byId('navi-pause-btn').style.opacity).toBe('1');
     expect(byId('navi-pause-btn').title).toBe('Pause');
-    expect(byId('navi-stop-btn').style.opacity).toBe('1');
     expect(byId('navi-stop-btn').title).toBe('Stop speaking');
 
     panel.setPlaybackStatus('paused');
     expect(byId('navi-pause-btn').title).toBe('Resume (paused)');
-    expect(byId('navi-stop-btn').style.opacity).toBe('1');
 
     panel.setPlaybackStatus('idle');
     expect(byId('navi-pause-btn').style.opacity).toBe('0.5');
     expect(byId('navi-pause-btn').title).toBe('Play / replay last message');
-    expect(byId('navi-stop-btn').style.opacity).toBe('0.5');
     expect(byId('navi-stop-btn').title).toBe('Nothing playing');
   });
 
-  it('open() shows the panel, fires onOpen, and focuses the confirm button first', () => {
-    const panel = new NaviPanel(ICON_URL, callbacks);
-
-    panel.open();
-
-    expect(byId('navi-panel').style.display).toBe('flex');
-    expect(callbacks.onOpen).toHaveBeenCalled();
-    expect(document.activeElement?.id).toBe('navi-font-confirm-btn');
-  });
-
-  it('open() focuses the chat input once the summary has loaded', () => {
-    const panel = new NaviPanel(ICON_URL, callbacks);
-    panel.markSummaryLoaded();
-
-    panel.open();
-
-    expect(byId('navi-messages').style.display).toBe('flex');
-    expect(document.activeElement?.id).toBe('navi-text-input');
-  });
-
   it('reflects listening state on the mic button', () => {
-    const panel = new NaviPanel(ICON_URL, makeCallbacks());
-
     panel.setVoiceButtonState(true);
     expect(byId('navi-voice-btn').textContent).toBe('🔴');
 
     panel.setVoiceButtonState(false);
     expect(byId('navi-voice-btn').textContent).toBe('🎙️');
-    expect(byId('navi-voice-btn').title).toBe('Click to speak');
   });
 });

@@ -1,6 +1,7 @@
 import './style.css';
 import { naviConfig, warnOnMissingConfig } from '@/config';
 import { parseEditCommand } from '@/core/commands/editCommand';
+import { TwoStepConfirm } from '@/core/commands/twoStepConfirm';
 import { attachSpeechShortcuts } from '@/core/keyboard/speechShortcuts';
 import { LLMClient } from '@/core/llm/client';
 import { loadSettings, saveSettings } from '@/core/settings/settings';
@@ -8,6 +9,7 @@ import { SpeechPlayer } from '@/core/speech/speechPlayer';
 import { VoiceRecognition } from '@/core/speech/stt';
 import { requestCellEdit } from '@/platform/sheets/editCell';
 import { readSpreadsheetData } from '@/platform/sheets/readSheet';
+import { NaviMenu } from '@/ui/menu';
 import { NaviPanel } from '@/ui/panel';
 
 export default defineContentScript({
@@ -21,10 +23,10 @@ export default defineContentScript({
 });
 
 /**
- * Composition root: builds the services, the panel, and the glue between
- * them. Chat/scan/edit flows are unchanged from v1; speech now runs through
- * the sentence-queue SpeechPlayer with keyboard controls (NAVI-005/006/008):
- * Shift = pause/resume, double-Shift = stop, Alt+. / Alt+, = speed.
+ * Composition root. Flow since Step 2: opening NAVI (icon or Alt/Option+N)
+ * greets and immediately scans + summarizes the sheet — no font picker, no
+ * confirm click (tracker: "voice prompting available on start"). Text size
+ * and other preferences live in the Alt/Option+M menu.
  */
 async function initializeNavi(): Promise<void> {
   console.log('NAVI: Initializing...');
@@ -42,9 +44,18 @@ async function initializeNavi(): Promise<void> {
     onResult: (transcript) => panel.submitTranscript(transcript),
     onStateChange: (listening) => panel.setVoiceButtonState(listening),
     onBeforeStart: () => player.stop(),
+    onPermissionDenied: () => {
+      const msg =
+        'Microphone access is blocked. To fix it, click the microphone icon at the right end of the address bar and choose Allow.';
+      panel.addMessage(msg, 'ai');
+      player.speak(msg);
+    },
   });
 
   let greeted = false;
+  let summaryStarted = false;
+  let closingForQuit = false;
+  const quitConfirm = new TwoStepConfirm();
 
   const panel = new NaviPanel(
     chrome.runtime.getURL('icons/navi_eye_black_bg.png'),
@@ -54,21 +65,74 @@ async function initializeNavi(): Promise<void> {
           greeted = true;
           player.speak("Hi, I'm NAVI.");
         }
+        if (!summaryStarted) {
+          summaryStarted = true;
+          void loadSpreadsheetAndSummarize();
+        }
       },
-      onConfirm: () => void loadSpreadsheetAndSummarize(),
       onUserMessage: (text) => void handleUserMessage(text),
       onVoiceToggle: () => stt.toggle(),
       onPauseToggle: () => player.togglePause(),
       onStop: () => player.stop(),
-      onClose: () => player.stop(),
+      onClose: () => {
+        menu.hide();
+        quitConfirm.reset();
+        if (!closingForQuit) player.stop();
+        closingForQuit = false;
+      },
     },
   );
+
+  panel.applyFontSize(settings.fontSize);
+
+  const menu = new NaviMenu(panel.getMenuContainer(), {
+    announce: (text) => player.speak(text),
+    getFontSize: () => settings.fontSize,
+    setFontSize: (size) => {
+      settings.fontSize = size;
+      panel.applyFontSize(size);
+      void saveSettings({ fontSize: size });
+    },
+    getGreetingEnabled: () => settings.greetingEnabled,
+    setGreetingEnabled: (enabled) => {
+      settings.greetingEnabled = enabled;
+      void saveSettings({ greetingEnabled: enabled });
+    },
+    getSpeechRate: () => player.getRate(),
+    onClose: () => {
+      if (panel.isOpen) panel.focusInput();
+    },
+  });
 
   stt.init();
 
   attachSpeechShortcuts(document, player, {
-    onRateChange: (rate) => void saveSettings({ speechRate: rate }),
+    onRateChange: (rate) => {
+      settings.speechRate = rate;
+      void saveSettings({ speechRate: rate });
+      // Mid-speech the sentence restarts at the new speed (feedback enough);
+      // when idle, say it out loud so the change is never silent.
+      if (player.playbackStatus === 'idle') player.speak(`Speed ${rate}`);
+    },
     onOpenNavi: () => panel.open(),
+    onOpenMenu: () => {
+      if (!panel.isOpen) panel.open();
+      menu.toggle();
+    },
+    onQuitNavi: () => {
+      if (!panel.isOpen) return;
+      if (quitConfirm.press() === 'prompt') {
+        const msg = 'Do you want to close NAVI? Press the shortcut again to confirm.';
+        panel.addMessage(msg, 'ai');
+        player.speak(msg);
+      } else {
+        const msg = 'Closing NAVI. See you next time.';
+        panel.addMessage(msg, 'ai');
+        closingForQuit = true; // keep the farewell playing through close
+        panel.close();
+        player.speak(msg);
+      }
+    },
   });
 
   // Browser-level open shortcut, forwarded by the background worker —
@@ -92,8 +156,6 @@ async function initializeNavi(): Promise<void> {
 
     panel.addMessage(summary, 'ai');
     player.speak(summary);
-
-    panel.markSummaryLoaded();
   }
 
   async function handleUserMessage(text: string): Promise<void> {

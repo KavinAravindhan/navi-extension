@@ -32,8 +32,12 @@ The extension ID is pinned to `fojpekkjeokfmckeohalgnmdjcdeejme` (via the `key` 
 | Replay the last message (when nothing is playing) | tap **Shift** once | ⏯️ |
 | Stop completely | tap **Shift** twice quickly | ⏹️ |
 | Speak faster / slower (5 steps, remembered) | **Alt + .** / **Alt + ,** | — |
+| Open the NAVI menu (text size, greeting, speed info) | **Alt + M** | — |
+| Quit NAVI (asks for confirmation, press again to confirm) | **Alt + Q** | ✕ |
 
 A clean Shift tap only — Shift held with any other key (normal typing) never triggers playback controls.
+
+Opening NAVI greets you and immediately scans + summarizes the sheet — there is no setup screen. Text size is changed from the menu and remembered.
 
 ## Development
 

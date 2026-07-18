@@ -27,9 +27,17 @@ describe('loadSettings', () => {
   it('returns stored values merged over defaults', async () => {
     chromeMock.storage.sync.get.mockImplementation(
       (defaults: Record<string, unknown>, cb: (items: Record<string, unknown>) => void) =>
-        cb({ ...defaults, speechRate: 1.5 }),
+        cb({ ...defaults, speechRate: 1.5, fontSize: 'xlarge' }),
     );
-    expect(await loadSettings()).toEqual({ ...DEFAULT_SETTINGS, speechRate: 1.5 });
+    expect(await loadSettings()).toEqual({
+      ...DEFAULT_SETTINGS,
+      speechRate: 1.5,
+      fontSize: 'xlarge',
+    });
+  });
+
+  it('defaults include a medium font size', () => {
+    expect(DEFAULT_SETTINGS.fontSize).toBe('medium');
   });
 
   it('falls back to defaults when storage reports an error', async () => {
