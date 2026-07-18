@@ -37,7 +37,17 @@ export interface NaviSettings {
   contextScope: ContextScope;
   /** Language for UI strings, speech, voice input, and AI responses. */
   language: Language;
+  /** TTS engine: fast built-in voice vs natural OpenAI voice (NAVI-017). */
+  voiceEngine: VoiceEngine;
+  /** Voice input engine: built-in recognition vs Whisper (better for id). */
+  sttEngine: SttEngine;
 }
+
+/** 'system' = built-in speechSynthesis; 'natural' = OpenAI neural TTS. */
+export type VoiceEngine = 'system' | 'natural';
+
+/** 'browser' = Web Speech recognition; 'whisper' = OpenAI Whisper. */
+export type SttEngine = 'browser' | 'whisper';
 
 export const DEFAULT_SETTINGS: NaviSettings = {
   speechRate: 1.0,
@@ -46,6 +56,8 @@ export const DEFAULT_SETTINGS: NaviSettings = {
   outputMode: 'voice',
   contextScope: 'tab',
   language: 'en',
+  voiceEngine: 'system',
+  sttEngine: 'browser',
 };
 
 export function loadSettings(): Promise<NaviSettings> {

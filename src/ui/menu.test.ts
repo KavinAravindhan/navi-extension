@@ -5,6 +5,8 @@ import type {
   ContextScope,
   FontSize,
   OutputMode,
+  SttEngine,
+  VoiceEngine,
 } from '@/core/settings/settings';
 import { NaviMenu, type MenuDeps } from './menu';
 
@@ -17,6 +19,8 @@ describe('NaviMenu', () => {
     outputMode: OutputMode;
     contextScope: ContextScope;
     language: Language;
+    voiceEngine: VoiceEngine;
+    sttEngine: SttEngine;
   };
   let deps: MenuDeps & {
     announce: ReturnType<typeof vi.fn<(text: string) => void>>;
@@ -39,6 +43,8 @@ describe('NaviMenu', () => {
       outputMode: 'voice',
       contextScope: 'tab',
       language: 'en',
+      voiceEngine: 'system',
+      sttEngine: 'browser',
     };
     deps = {
       t: makeT(() => state.language),
@@ -63,6 +69,14 @@ describe('NaviMenu', () => {
       getLanguage: () => state.language,
       setLanguage: vi.fn((language: Language) => {
         state.language = language;
+      }),
+      getVoiceEngine: () => state.voiceEngine,
+      setVoiceEngine: vi.fn((engine: VoiceEngine) => {
+        state.voiceEngine = engine;
+      }),
+      getSttEngine: () => state.sttEngine,
+      setSttEngine: vi.fn((engine: SttEngine) => {
+        state.sttEngine = engine;
       }),
       onClose: vi.fn<() => void>(),
     };
@@ -94,6 +108,10 @@ describe('NaviMenu', () => {
       'AI reads: Entire workbook',
       'Language: English',
       'Language: Bahasa Indonesia',
+      'Voice: System (fast)',
+      'Voice: Natural (OpenAI)',
+      'Microphone: Standard',
+      'Microphone: Whisper (OpenAI)',
       'Greeting when NAVI opens',
       'Speech speed: 1.25',
       'Close menu',
@@ -115,6 +133,22 @@ describe('NaviMenu', () => {
     );
     expect(
       itemByLabel('AI reads: Entire workbook').getAttribute('aria-checked'),
+    ).toBe('true');
+  });
+
+  it('switching voice and microphone engines persists and announces', () => {
+    menu.show();
+
+    itemByLabel('Voice: Natural (OpenAI)').click();
+    expect(deps.setVoiceEngine).toHaveBeenCalledWith('natural');
+    expect(deps.announce).toHaveBeenCalledWith(
+      expect.stringContaining('Natural voice on'),
+    );
+
+    itemByLabel('Microphone: Whisper (OpenAI)').click();
+    expect(deps.setSttEngine).toHaveBeenCalledWith('whisper');
+    expect(
+      itemByLabel('Microphone: Whisper (OpenAI)').getAttribute('aria-checked'),
     ).toBe('true');
   });
 

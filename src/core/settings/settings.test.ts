@@ -44,6 +44,11 @@ describe('loadSettings', () => {
     expect(DEFAULT_SETTINGS.language).toBe('en');
   });
 
+  it('defaults to the free built-in speech engines', () => {
+    expect(DEFAULT_SETTINGS.voiceEngine).toBe('system');
+    expect(DEFAULT_SETTINGS.sttEngine).toBe('browser');
+  });
+
   it('falls back to defaults when storage reports an error', async () => {
     chromeMock.runtime.lastError = { message: 'storage unavailable' };
     chromeMock.storage.sync.get.mockImplementation(

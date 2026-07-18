@@ -10,6 +10,8 @@ export interface VoiceRecognitionOptions {
    * recovery instructions instead of failing silently (NAVI-011).
    */
   onPermissionDenied?: () => void;
+  /** Called when a recording could not be transcribed (Whisper engine). */
+  onTranscriptionError?: () => void;
 }
 
 /**

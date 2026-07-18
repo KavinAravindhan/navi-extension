@@ -4,6 +4,8 @@ import type {
   ContextScope,
   FontSize,
   OutputMode,
+  SttEngine,
+  VoiceEngine,
 } from '@/core/settings/settings';
 
 export interface MenuDeps {
@@ -22,6 +24,10 @@ export interface MenuDeps {
   setContextScope: (scope: ContextScope) => void;
   getLanguage: () => Language;
   setLanguage: (language: Language) => void;
+  getVoiceEngine: () => VoiceEngine;
+  setVoiceEngine: (engine: VoiceEngine) => void;
+  getSttEngine: () => SttEngine;
+  setSttEngine: (engine: SttEngine) => void;
   /** Called after the menu closes (controller restores focus). */
   onClose?: () => void;
 }
@@ -168,6 +174,52 @@ export class NaviMenu {
       onActivate: () => {
         this.deps.setLanguage('id');
         this.deps.announce(this.deps.t('languageSet'));
+        this.refreshChecks();
+      },
+    });
+
+    const voiceEngine = this.deps.getVoiceEngine();
+    this.addItem({
+      label: t('menuVoiceSystem'),
+      role: 'menuitemradio',
+      checked: voiceEngine === 'system',
+      onActivate: () => {
+        this.deps.setVoiceEngine('system');
+        this.deps.announce(t('voiceSystemOn'));
+        this.refreshChecks();
+      },
+    });
+
+    this.addItem({
+      label: t('menuVoiceNatural'),
+      role: 'menuitemradio',
+      checked: voiceEngine === 'natural',
+      onActivate: () => {
+        this.deps.setVoiceEngine('natural');
+        this.deps.announce(t('voiceNaturalOn'));
+        this.refreshChecks();
+      },
+    });
+
+    const sttEngine = this.deps.getSttEngine();
+    this.addItem({
+      label: t('menuMicBrowser'),
+      role: 'menuitemradio',
+      checked: sttEngine === 'browser',
+      onActivate: () => {
+        this.deps.setSttEngine('browser');
+        this.deps.announce(t('micBrowserOn'));
+        this.refreshChecks();
+      },
+    });
+
+    this.addItem({
+      label: t('menuMicWhisper'),
+      role: 'menuitemradio',
+      checked: sttEngine === 'whisper',
+      onActivate: () => {
+        this.deps.setSttEngine('whisper');
+        this.deps.announce(t('micWhisperOn'));
         this.refreshChecks();
       },
     });

@@ -37,10 +37,13 @@ The extension ID is pinned to `fojpekkjeokfmckeohalgnmdjcdeejme` (via the `key` 
 | Open the NAVI menu (text size, output mode, greeting, speed) | **Alt + M** | — |
 | Quit NAVI (asks for confirmation, press again to confirm) | **Alt + Q** | ✕ |
 | Screen-reader mode + announce the active cell | **Ctrl + Alt + Z** | via menu |
+| Read what's on the clipboard | **Alt + C** | — |
 
 A clean Shift tap only — Shift held with any other key (normal typing) never triggers playback controls.
 
 Opening NAVI greets you and immediately scans + summarizes the sheet — there is no setup screen. Text size is changed from the menu and remembered.
+
+The menu (Alt+M) also switches the **voice** (fast system voice vs natural OpenAI voice), the **microphone** (standard vs Whisper — better accuracy, echo-cancelled, strong Indonesian support), and the **language** (English / Bahasa Indonesia).
 
 **Using a screen reader (NVDA / JAWS / VoiceOver)?** Switch NAVI to screen-reader mode (menu → "Read out loud: My screen reader", or Ctrl+Alt+Z). NAVI then stays silent and your screen reader reads its responses — no two voices talking over each other. The manual screen-reader test script lives in [docs/a11y-testing.md](docs/a11y-testing.md).
 
