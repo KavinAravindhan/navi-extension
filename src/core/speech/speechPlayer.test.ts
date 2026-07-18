@@ -194,4 +194,21 @@ describe('SpeechPlayer', () => {
     player.speak('**Bold** and `code`.');
     expect(synth.current?.text).toBe('Bold and code.');
   });
+
+  it('setLanguage switches the utterance language and re-picks the voice', () => {
+    synth.setVoices([
+      { name: 'Google US English', lang: 'en-US', default: false },
+      { name: 'Google Bahasa Indonesia', lang: 'id-ID', default: false },
+    ]);
+
+    player.speak('Hello.');
+    expect(synth.current?.lang).toBe('en-US');
+    expect(synth.current?.voice?.name).toBe('Google US English');
+
+    player.setLanguage('id-ID');
+    player.speak('Halo.');
+
+    expect(synth.current?.lang).toBe('id-ID');
+    expect(synth.current?.voice?.name).toBe('Google Bahasa Indonesia');
+  });
 });

@@ -1,3 +1,4 @@
+import { makeT, type Translate } from '@/core/i18n/i18n';
 import type { FontSize, OutputMode } from '@/core/settings/settings';
 import type { PlaybackStatus } from '@/core/speech/speechPlayer';
 import { renderMarkdown } from './markdown';
@@ -28,11 +29,16 @@ export interface PanelCallbacks {
  * Text size is a persisted setting changed from the NAVI menu instead.
  */
 export class NaviPanel {
+  private readonly doc: Document;
+  private readonly t: Translate;
+
   constructor(
     iconUrl: string,
     private readonly callbacks: PanelCallbacks,
-    private readonly doc: Document = document,
+    opts: { t?: Translate; doc?: Document } = {},
   ) {
+    this.doc = opts.doc ?? document;
+    this.t = opts.t ?? makeT(() => 'en');
     this.buildDom(iconUrl);
     this.wireEvents();
   }
@@ -80,7 +86,7 @@ export class NaviPanel {
       <input
         type="text"
         id="navi-text-input"
-        placeholder="Ask NAVI something..."
+        placeholder="${this.t('inputPlaceholder')}"
         aria-label="Message NAVI"
         autocomplete="off"
       />
@@ -253,7 +259,7 @@ export class NaviPanel {
       voiceBtn.setAttribute('aria-pressed', String(listening));
       voiceBtn.setAttribute(
         'aria-label',
-        listening ? 'Stop listening' : 'Start voice input',
+        listening ? this.t('ariaMicStop') : this.t('ariaMicStart'),
       );
     }
   }

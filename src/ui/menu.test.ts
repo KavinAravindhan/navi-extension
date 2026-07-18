@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { makeT } from '@/core/i18n/i18n';
+import type { Language } from '@/core/i18n/strings';
 import type {
   ContextScope,
   FontSize,
@@ -14,6 +16,7 @@ describe('NaviMenu', () => {
     rate: number;
     outputMode: OutputMode;
     contextScope: ContextScope;
+    language: Language;
   };
   let deps: MenuDeps & {
     announce: ReturnType<typeof vi.fn<(text: string) => void>>;
@@ -35,8 +38,10 @@ describe('NaviMenu', () => {
       rate: 1.25,
       outputMode: 'voice',
       contextScope: 'tab',
+      language: 'en',
     };
     deps = {
+      t: makeT(() => state.language),
       announce: vi.fn<(text: string) => void>(),
       getFontSize: () => state.fontSize,
       setFontSize: vi.fn((size: FontSize) => {
@@ -54,6 +59,10 @@ describe('NaviMenu', () => {
       getContextScope: () => state.contextScope,
       setContextScope: vi.fn((scope: ContextScope) => {
         state.contextScope = scope;
+      }),
+      getLanguage: () => state.language,
+      setLanguage: vi.fn((language: Language) => {
+        state.language = language;
       }),
       onClose: vi.fn<() => void>(),
     };
@@ -83,6 +92,8 @@ describe('NaviMenu', () => {
       'Read out loud: My screen reader',
       'AI reads: Current tab only',
       'AI reads: Entire workbook',
+      'Language: English',
+      'Language: Bahasa Indonesia',
       'Greeting when NAVI opens',
       'Speech speed: 1.25',
       'Close menu',
@@ -105,6 +116,22 @@ describe('NaviMenu', () => {
     expect(
       itemByLabel('AI reads: Entire workbook').getAttribute('aria-checked'),
     ).toBe('true');
+  });
+
+  it('switching to Indonesian announces the confirmation IN Indonesian', () => {
+    menu.show();
+
+    itemByLabel('Language: Bahasa Indonesia').click();
+
+    expect(deps.setLanguage).toHaveBeenCalledWith('id');
+    // t() is live: after the setter runs, the announcement is Indonesian.
+    expect(deps.announce).toHaveBeenCalledWith(
+      'Bahasa diatur ke Bahasa Indonesia. Memindai ulang sekarang.',
+    );
+    // The menu re-renders with Indonesian labels immediately.
+    expect(
+      items().some((i) => i.textContent === 'Ukuran teks: Sedang'),
+    ).toBe(true);
   });
 
   it('choosing screen-reader output persists it and announces the change', () => {

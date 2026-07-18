@@ -20,6 +20,10 @@ export type OutputMode = 'voice' | 'screenreader';
 /** How much of the workbook feeds the AI context (NAVI-010). */
 export type ContextScope = 'tab' | 'file';
 
+/** UI + speech + response language (tracker P0: Bahasa Indonesia). */
+export type { Language } from '@/core/i18n/strings';
+import type { Language } from '@/core/i18n/strings';
+
 export interface NaviSettings {
   /** SpeechSynthesis rate multiplier. */
   speechRate: number;
@@ -31,6 +35,8 @@ export interface NaviSettings {
   outputMode: OutputMode;
   /** Current tab only (default) vs entire workbook (NAVI-010). */
   contextScope: ContextScope;
+  /** Language for UI strings, speech, voice input, and AI responses. */
+  language: Language;
 }
 
 export const DEFAULT_SETTINGS: NaviSettings = {
@@ -39,6 +45,7 @@ export const DEFAULT_SETTINGS: NaviSettings = {
   fontSize: 'medium',
   outputMode: 'voice',
   contextScope: 'tab',
+  language: 'en',
 };
 
 export function loadSettings(): Promise<NaviSettings> {
