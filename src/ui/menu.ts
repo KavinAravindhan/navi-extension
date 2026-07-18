@@ -28,6 +28,10 @@ export interface MenuDeps {
   setVoiceEngine: (engine: VoiceEngine) => void;
   getSttEngine: () => SttEngine;
   setSttEngine: (engine: SttEngine) => void;
+  getWakeWordEnabled: () => boolean;
+  setWakeWordEnabled: (enabled: boolean) => void;
+  /** Replays the first-run walkthrough (NAVI-012). */
+  onPlayTour: () => void;
   /** Called after the menu closes (controller restores focus). */
   onClose?: () => void;
 }
@@ -225,6 +229,18 @@ export class NaviMenu {
     });
 
     this.addItem({
+      label: t('menuWakeWord'),
+      role: 'menuitemcheckbox',
+      checked: this.deps.getWakeWordEnabled(),
+      onActivate: () => {
+        const enabled = !this.deps.getWakeWordEnabled();
+        this.deps.setWakeWordEnabled(enabled);
+        this.deps.announce(enabled ? t('wakeOn') : t('wakeOff'));
+        this.refreshChecks();
+      },
+    });
+
+    this.addItem({
       label: t('menuGreeting'),
       role: 'menuitemcheckbox',
       checked: this.deps.getGreetingEnabled(),
@@ -241,6 +257,15 @@ export class NaviMenu {
       role: 'menuitem',
       onActivate: () => {
         this.deps.announce(t('menuSpeedInfo', { rate: this.deps.getSpeechRate() }));
+      },
+    });
+
+    this.addItem({
+      label: t('menuTour'),
+      role: 'menuitem',
+      onActivate: () => {
+        this.hide();
+        this.deps.onPlayTour();
       },
     });
 

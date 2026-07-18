@@ -7,6 +7,7 @@ import {
   makeT,
 } from '@/core/i18n/i18n';
 import { attachSpeechShortcuts } from '@/core/keyboard/speechShortcuts';
+import { buildTourScript } from '@/core/onboarding/tour';
 import { LLMClient } from '@/core/llm/client';
 import { ToolRegistry } from '@/core/llm/tools';
 import {
@@ -18,6 +19,7 @@ import { Announcer, createLiveRegion } from '@/core/speech/announcer';
 import { OpenAITTSEngine } from '@/core/speech/naturalTtsEngine';
 import { SpeechPlayer } from '@/core/speech/speechPlayer';
 import { VoiceRecognition, type VoiceRecognitionOptions } from '@/core/speech/stt';
+import { WakeWordListener } from '@/core/speech/wakeWord';
 import { WebSpeechEngine } from '@/core/speech/webSpeechEngine';
 import { WhisperRecognition } from '@/core/speech/whisperStt';
 import {
@@ -124,9 +126,25 @@ async function initializeNavi(): Promise<void> {
   const systemVoice = new WebSpeechEngine(SPEECH_LANG[settings.language]);
   const naturalVoice = new OpenAITTSEngine(naviConfig.openaiApiKey);
 
+  // One-shot hook: lets the tour hand over to the first scan when it ends
+  // (a double-Shift skip also lands here — skipping goes straight to the scan).
+  let afterIdle: (() => void) | null = null;
+  const afterSpeechEnds = (fn: () => void): void => {
+    afterIdle = fn;
+  };
+
   const player = new SpeechPlayer(
     settings.speechRate,
-    { onStatusChange: (status) => panel.setPlaybackStatus(status) },
+    {
+      onStatusChange: (status) => {
+        panel.setPlaybackStatus(status);
+        if (status === 'idle' && afterIdle) {
+          const fn = afterIdle;
+          afterIdle = null;
+          fn();
+        }
+      },
+    },
     () => (settings.voiceEngine === 'natural' ? naturalVoice : systemVoice),
   );
   player.setLanguage(SPEECH_LANG[settings.language]);
@@ -194,10 +212,45 @@ async function initializeNavi(): Promise<void> {
   let closingForQuit = false;
   const quitConfirm = new TwoStepConfirm();
 
+  // Opt-in "Hey NAVI" (NAVI-015): listens only while the panel is CLOSED.
+  const wake = new WakeWordListener(() => {
+    panel.open();
+    announcer.say(t('wakeHeard'));
+  });
+  wake.setLanguage(SPEECH_LANG[settings.language]);
+  const wakeAvailable = wake.isSupported();
+
+  /** Speaks the walkthrough; on first run the scan starts when it ends. */
+  const runTour = (opts: { firstTime: boolean }): void => {
+    const script = buildTourScript(t);
+    panel.addMessage(script, 'ai');
+    const startScan = () => {
+      if (!summaryStarted) {
+        summaryStarted = true;
+        void loadSpreadsheetAndSummarize();
+      }
+    };
+    if (settings.outputMode === 'voice') {
+      if (opts.firstTime) afterSpeechEnds(startScan);
+      player.speak(script);
+    } else {
+      // Screen-reader mode: the live log reads the tour; scan right away.
+      if (opts.firstTime) startScan();
+    }
+  };
+
   const panel = new NaviPanel(
     chrome.runtime.getURL('icons/navi_eye_black_bg.png'),
     {
       onOpen: () => {
+        wake.stop(); // panel open — the normal mic takes over
+        if (!settings.onboardingDone) {
+          settings.onboardingDone = true;
+          greeted = true; // the tour IS the greeting
+          void saveSettings({ onboardingDone: true });
+          runTour({ firstTime: true });
+          return;
+        }
         if (!greeted && settings.greetingEnabled) {
           greeted = true;
           announcer.say(t('greeting'));
@@ -216,6 +269,7 @@ async function initializeNavi(): Promise<void> {
         quitConfirm.reset();
         if (!closingForQuit) player.stop();
         closingForQuit = false;
+        if (settings.wakeWordEnabled && wakeAvailable) wake.start();
       },
     },
     { t },
@@ -262,6 +316,7 @@ async function initializeNavi(): Promise<void> {
       player.setLanguage(SPEECH_LANG[language]);
       browserStt.setLanguage(SPEECH_LANG[language]);
       whisperStt.setLanguage(SPEECH_LANG[language]);
+      wake.setLanguage(SPEECH_LANG[language]);
       void loadSpreadsheetAndSummarize(); // re-summarize in the new language
     },
     getVoiceEngine: () => settings.voiceEngine,
@@ -270,6 +325,18 @@ async function initializeNavi(): Promise<void> {
       player.stop(); // next speech starts cleanly on the new engine
       void saveSettings({ voiceEngine: engine });
     },
+    getWakeWordEnabled: () => settings.wakeWordEnabled,
+    setWakeWordEnabled: (enabled) => {
+      if (enabled && !wakeAvailable) {
+        announcer.say(t('wakeUnavailable'));
+        return;
+      }
+      settings.wakeWordEnabled = enabled;
+      void saveSettings({ wakeWordEnabled: enabled });
+      if (!enabled) wake.stop();
+      // When enabled, listening begins the next time the panel closes.
+    },
+    onPlayTour: () => runTour({ firstTime: false }),
     getSttEngine: () => settings.sttEngine,
     setSttEngine: (engine) => {
       if (engine === 'whisper' && !whisperAvailable) {
@@ -286,6 +353,9 @@ async function initializeNavi(): Promise<void> {
   });
 
   browserStt.init();
+
+  // Wake word active from the start when enabled (panel begins closed).
+  if (settings.wakeWordEnabled && wakeAvailable) wake.start();
 
   attachSpeechShortcuts(document, player, {
     onRateChange: (rate) => {

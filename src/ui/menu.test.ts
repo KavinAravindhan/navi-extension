@@ -21,6 +21,7 @@ describe('NaviMenu', () => {
     language: Language;
     voiceEngine: VoiceEngine;
     sttEngine: SttEngine;
+    wakeWordEnabled: boolean;
   };
   let deps: MenuDeps & {
     announce: ReturnType<typeof vi.fn<(text: string) => void>>;
@@ -45,6 +46,7 @@ describe('NaviMenu', () => {
       language: 'en',
       voiceEngine: 'system',
       sttEngine: 'browser',
+      wakeWordEnabled: false,
     };
     deps = {
       t: makeT(() => state.language),
@@ -78,6 +80,11 @@ describe('NaviMenu', () => {
       setSttEngine: vi.fn((engine: SttEngine) => {
         state.sttEngine = engine;
       }),
+      getWakeWordEnabled: () => state.wakeWordEnabled,
+      setWakeWordEnabled: vi.fn((enabled: boolean) => {
+        state.wakeWordEnabled = enabled;
+      }),
+      onPlayTour: vi.fn<() => void>(),
       onClose: vi.fn<() => void>(),
     };
     menu = new NaviMenu(container, deps);
@@ -112,8 +119,10 @@ describe('NaviMenu', () => {
       'Voice: Natural (OpenAI)',
       'Microphone: Standard',
       'Microphone: Whisper (OpenAI)',
+      'Wake word: "Hey NAVI"',
       'Greeting when NAVI opens',
       'Speech speed: 1.25',
+      'Play the welcome tour',
       'Close menu',
     ]);
     expect(itemByLabel('Text size: Medium').getAttribute('aria-checked')).toBe('true');
@@ -134,6 +143,20 @@ describe('NaviMenu', () => {
     expect(
       itemByLabel('AI reads: Entire workbook').getAttribute('aria-checked'),
     ).toBe('true');
+  });
+
+  it('the wake word toggle announces its privacy note, and the tour item plays', () => {
+    menu.show();
+
+    itemByLabel('Wake word: "Hey NAVI"').click();
+    expect(deps.setWakeWordEnabled).toHaveBeenCalledWith(true);
+    expect(deps.announce).toHaveBeenCalledWith(
+      expect.stringContaining('keeps listening'),
+    );
+
+    itemByLabel('Play the welcome tour').click();
+    expect(deps.onPlayTour).toHaveBeenCalledOnce();
+    expect(menu.isOpen).toBe(false); // menu closes so the tour is audible
   });
 
   it('switching voice and microphone engines persists and announces', () => {

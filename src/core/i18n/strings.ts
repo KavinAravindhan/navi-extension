@@ -70,6 +70,25 @@ export const STRINGS = {
     menuClose: 'Close menu',
     itemSelected: ', selected',
     itemNotSelected: ', not selected',
+    menuWakeWord: 'Wake word: "Hey NAVI"',
+    wakeOn:
+      'Wake word on. While this tab is open, NAVI keeps listening for "Hey NAVI", even when the panel is closed. You can turn this off here anytime.',
+    wakeOff: 'Wake word off.',
+    wakeUnavailable: 'The wake word is not available in this browser.',
+    wakeHeard: 'Yes? How can I help?',
+    menuTour: 'Play the welcome tour',
+    tourIntro:
+      "Welcome! I'm NAVI, your spreadsheet assistant. Here is a quick tour. Tap Shift twice at any time to skip it.",
+    tourPause:
+      'To pause or continue my voice, tap the Shift key once. You can try it right now while I keep talking.',
+    tourSpeed:
+      'To change my speed, hold Alt and press period to go faster, or Alt and comma to go slower.',
+    tourShortcuts:
+      'Press Alt and N to open me from anywhere in the sheet. Press Alt and M for my menu with all settings. Press Alt and Q twice to close me.',
+    tourTalk:
+      'To talk to me, click the microphone button or type in the message box. I can read your data, answer questions, and edit cells for you.',
+    tourEnd:
+      'You can replay this tour anytime from my menu. Now let me scan your spreadsheet.',
   },
   id: {
     greeting: 'Halo, saya NAVI.',
@@ -135,6 +154,25 @@ export const STRINGS = {
     menuClose: 'Tutup menu',
     itemSelected: ', terpilih',
     itemNotSelected: ', tidak terpilih',
+    menuWakeWord: 'Kata pemicu: "Hey NAVI"',
+    wakeOn:
+      'Kata pemicu aktif. Selama tab ini terbuka, NAVI terus mendengarkan "Hey NAVI", bahkan saat panel tertutup. Anda bisa mematikannya di sini kapan saja.',
+    wakeOff: 'Kata pemicu dimatikan.',
+    wakeUnavailable: 'Kata pemicu tidak tersedia di peramban ini.',
+    wakeHeard: 'Ya? Ada yang bisa saya bantu?',
+    menuTour: 'Putar tur sambutan',
+    tourIntro:
+      'Selamat datang! Saya NAVI, asisten spreadsheet Anda. Ini tur singkat. Ketuk Shift dua kali kapan saja untuk melewatinya.',
+    tourPause:
+      'Untuk menjeda atau melanjutkan suara saya, ketuk tombol Shift sekali. Anda bisa mencobanya sekarang selagi saya bicara.',
+    tourSpeed:
+      'Untuk mengubah kecepatan, tahan Alt dan tekan titik untuk mempercepat, atau Alt dan koma untuk memperlambat.',
+    tourShortcuts:
+      'Tekan Alt dan N untuk membuka saya dari mana saja di sheet. Tekan Alt dan M untuk menu dengan semua pengaturan. Tekan Alt dan Q dua kali untuk menutup saya.',
+    tourTalk:
+      'Untuk berbicara dengan saya, klik tombol mikrofon atau ketik di kotak pesan. Saya bisa membaca data Anda, menjawab pertanyaan, dan mengedit sel.',
+    tourEnd:
+      'Anda bisa memutar tur ini lagi kapan saja dari menu saya. Sekarang saya akan memindai spreadsheet Anda.',
   },
 } as const;
 
