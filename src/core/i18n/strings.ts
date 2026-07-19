@@ -17,6 +17,8 @@ export const STRINGS = {
     overviewCharts: 'It also has {count} chart{plural}.',
     readFail:
       "I couldn't read this spreadsheet. Please make sure Chrome is signed in to a Google account that can view it. Details: {details}.",
+    readFailAccount:
+      "I couldn't read this spreadsheet. I'm using the Google account {email}. If this file belongs to a different account — for example a school or work account — ask its owner to share it with {email}, or open it in a Chrome profile signed in as the owner. Details: {details}.",
     thinking: 'Thinking...',
     micBlocked:
       'Microphone access is blocked. To fix it, click the microphone icon at the right end of the address bar and choose Allow.',
@@ -114,6 +116,8 @@ export const STRINGS = {
     overviewCharts: 'Ada juga {count} grafik{plural}.',
     readFail:
       'Saya tidak bisa membaca spreadsheet ini. Pastikan Chrome masuk dengan akun Google yang punya akses. Detail: {details}.',
+    readFailAccount:
+      'Saya tidak bisa membaca spreadsheet ini. Saya memakai akun Google {email}. Jika file ini milik akun lain — misalnya akun kampus atau kantor — minta pemiliknya membagikannya ke {email}, atau buka di profil Chrome pemiliknya. Detail: {details}.',
     thinking: 'Sedang berpikir...',
     micBlocked:
       'Akses mikrofon diblokir. Untuk memperbaikinya, klik ikon mikrofon di ujung kanan bilah alamat dan pilih Izinkan.',

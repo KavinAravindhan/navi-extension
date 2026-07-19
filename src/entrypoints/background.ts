@@ -1,6 +1,8 @@
 import {
+  handleCreateChart,
   handleEditCell,
   handleGetWorkbook,
+  handleReadFormatting,
   handleReadRange,
 } from '@/platform/sheets/sheetsApi';
 import { OPEN_NAVI_ACTION } from '@/platform/sheets/messages';
@@ -24,6 +26,25 @@ export default defineBackground(() => {
         return respond(handleGetWorkbook(message as never));
       case 'readRange':
         return respond(handleReadRange(message as never));
+      case 'createChart':
+        return respond(handleCreateChart(message as never));
+      case 'readFormatting':
+        return respond(handleReadFormatting(message as never));
+      case 'getProfile':
+        // Which Google account is Chrome (and therefore NAVI) using? Spoken
+        // in read-failure guidance so users know how to fix sharing.
+        return respond(
+          new Promise((resolve) => {
+            try {
+              chrome.identity.getProfileUserInfo(
+                { accountStatus: 'ANY' } as chrome.identity.ProfileDetails,
+                (info) => resolve({ email: info?.email || null }),
+              );
+            } catch {
+              resolve({ email: null });
+            }
+          }),
+        );
       case 'getShortcut':
         // What is the open-NAVI key actually bound to on THIS machine?
         // (Chrome can silently fail to bind it — NAVI speaks the truth.)
