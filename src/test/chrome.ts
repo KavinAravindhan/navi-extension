@@ -24,6 +24,23 @@ export function installChromeMock() {
         ),
         set: vi.fn((_items: Record<string, unknown>, cb?: () => void) => cb?.()),
       },
+      session: (() => {
+        // A real tiny store — the cross-app memory tests need persistence.
+        let data: Record<string, unknown> = {};
+        return {
+          get: vi.fn(
+            (defaults: Record<string, unknown>, cb: (items: Record<string, unknown>) => void) =>
+              cb({ ...defaults, ...data }),
+          ),
+          set: vi.fn((items: Record<string, unknown>, cb?: () => void) => {
+            data = { ...data, ...items };
+            cb?.();
+          }),
+          __reset: () => {
+            data = {};
+          },
+        };
+      })(),
     },
   };
   vi.stubGlobal('chrome', chromeMock);

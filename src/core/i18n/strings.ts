@@ -15,6 +15,10 @@ export const STRINGS = {
     overviewCurrent: "You're on {tab}, with {rows} rows.",
     overviewCurrentWithHeading: "You're on {tab} — a table called {heading} with {rows} rows.",
     overviewCharts: 'It also has {count} chart{plural}.',
+    overviewDoc:
+      'This document is titled {title}, about {words} words, with {count} headings: {names}.',
+    overviewDocNoHeadings: 'This document is titled {title}, about {words} words.',
+    overviewSlides: 'This presentation "{title}" has {count} slides. Slide one: {first}.',
     readFail:
       "I couldn't read this spreadsheet. Please make sure Chrome is signed in to a Google account that can view it. Details: {details}.",
     readFailAccount:
@@ -114,6 +118,10 @@ export const STRINGS = {
     overviewCurrent: 'Anda berada di {tab}, dengan {rows} baris.',
     overviewCurrentWithHeading: 'Anda berada di {tab} — tabel bernama {heading} dengan {rows} baris.',
     overviewCharts: 'Ada juga {count} grafik{plural}.',
+    overviewDoc:
+      'Dokumen ini berjudul {title}, sekitar {words} kata, dengan {count} judul bagian: {names}.',
+    overviewDocNoHeadings: 'Dokumen ini berjudul {title}, sekitar {words} kata.',
+    overviewSlides: 'Presentasi "{title}" punya {count} slide. Slide satu: {first}.',
     readFail:
       'Saya tidak bisa membaca spreadsheet ini. Pastikan Chrome masuk dengan akun Google yang punya akses. Detail: {details}.',
     readFailAccount:

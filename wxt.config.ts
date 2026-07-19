@@ -29,12 +29,18 @@ export default defineConfig({
     oauth2: {
       client_id:
         '923523142478-3f0r12g1ki8kkeoa56h7kdc88536gude.apps.googleusercontent.com',
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+      scopes: [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/documents',
+        'https://www.googleapis.com/auth/presentations',
+      ],
     },
 
     host_permissions: [
-      'https://docs.google.com/spreadsheets/*',
+      'https://docs.google.com/*',
       'https://sheets.googleapis.com/*',
+      'https://docs.googleapis.com/*',
+      'https://slides.googleapis.com/*',
     ],
 
     web_accessible_resources: [

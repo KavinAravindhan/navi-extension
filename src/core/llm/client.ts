@@ -27,6 +27,7 @@ const MAX_TOOL_ROUNDS = 5;
 export class LLMClient {
   private conversationHistory: ChatMessage[] = [];
   private languageName = 'English';
+  private surfaceLabel = 'Google Sheets';
 
   constructor(
     private readonly apiKey: string,
@@ -38,7 +39,7 @@ export class LLMClient {
     this.conversationHistory = [
       {
         role: 'system',
-        content: buildSystemPrompt(data, this.languageName),
+        content: buildSystemPrompt(data, this.languageName, this.surfaceLabel),
       },
     ];
   }
@@ -46,6 +47,11 @@ export class LLMClient {
   /** Response language for future contexts (applies on next context set). */
   setLanguage(languageName: string): void {
     this.languageName = languageName;
+  }
+
+  /** Which Google editor the user is in ("Google Docs", ...). */
+  setSurface(surfaceLabel: string): void {
+    this.surfaceLabel = surfaceLabel;
   }
 
   /** Exposed for tests. */
