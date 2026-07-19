@@ -555,10 +555,19 @@ ${o.text}`;
       syncWake();
     },
     // Half-duplex (NAVI-009): the moment we listen, nothing may be speaking
-    // and the wake loop must release the recognition engine.
+    // and the wake loop must release the recognition engine — including a
+    // pending deferred restart, which would otherwise steal the mic back.
     onBeforeStart: () => {
       player.stop();
+      if (wakeStartTimer !== null) {
+        clearTimeout(wakeStartTimer);
+        wakeStartTimer = null;
+      }
       wake.stop();
+    },
+    onStartFailed: () => {
+      announcer.say(t('micStartFail'));
+      syncWake(); // never leave both the mic and the wake word dead
     },
     onPermissionDenied: () => {
       const msg = t('micBlocked');
@@ -583,7 +592,7 @@ ${o.text}`;
     settings.language === 'id' && whisperAvailable ? whisperStt : browserStt;
 
   const stopListening = (): void => {
-    if (browserStt.isListening) browserStt.toggle();
+    browserStt.stop(); // also cancels a mid-retry open
     if (whisperStt.isListening) whisperStt.toggle();
   };
 

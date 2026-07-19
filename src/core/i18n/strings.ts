@@ -29,6 +29,8 @@ export const STRINGS = {
       'Microphone access is blocked. To fix it, click the microphone icon at the right end of the address bar and choose Allow.',
     micWillPrompt:
       'Chrome will ask for microphone permission. Please choose Allow.',
+    micStartFail:
+      "I couldn't open the microphone just now. Say hey navi, or press the microphone button to try again.",
     quitPrompt: 'Do you want to close NAVI? Press the shortcut again to confirm.',
     quitFarewell: 'Closing NAVI. See you next time.',
     menuOpened:
@@ -132,6 +134,8 @@ export const STRINGS = {
     micBlocked:
       'Akses mikrofon diblokir. Untuk memperbaikinya, klik ikon mikrofon di ujung kanan bilah alamat dan pilih Izinkan.',
     micWillPrompt: 'Chrome akan meminta izin mikrofon. Silakan pilih Izinkan.',
+    micStartFail:
+      'Saya tidak bisa membuka mikrofon barusan. Ucapkan hei navi, atau tekan tombol mikrofon untuk mencoba lagi.',
     quitPrompt:
       'Apakah Anda ingin menutup NAVI? Tekan pintasan sekali lagi untuk konfirmasi.',
     quitFarewell: 'Menutup NAVI. Sampai jumpa lagi.',
