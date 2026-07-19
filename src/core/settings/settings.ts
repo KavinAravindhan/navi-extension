@@ -39,6 +39,8 @@ export interface NaviSettings {
   language: Language;
   /** TTS engine: fast built-in voice vs natural OpenAI voice (NAVI-017). */
   voiceEngine: VoiceEngine;
+  /** Which OpenAI voice speaks in natural mode (nova = warm female). */
+  naturalVoiceName: string;
   /** Voice input engine: built-in recognition vs Whisper (better for id). */
   sttEngine: SttEngine;
   /** First-run audio walkthrough already played (NAVI-012). */
@@ -62,7 +64,8 @@ export const DEFAULT_SETTINGS: NaviSettings = {
   outputMode: 'voice',
   contextScope: 'tab',
   language: 'en',
-  voiceEngine: 'system',
+  voiceEngine: 'natural',
+  naturalVoiceName: 'nova',
   sttEngine: 'browser',
   onboardingDone: false,
   wakeWordEnabled: true,

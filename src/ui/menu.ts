@@ -4,8 +4,13 @@ import type {
   ContextScope,
   FontSize,
   OutputMode,
-  VoiceEngine,
 } from '@/core/settings/settings';
+
+/** 'system' or an OpenAI natural voice name. */
+export type VoiceChoice = string;
+
+/** Natural voices offered in the picker; Nova (female) is the default. */
+export const NATURAL_VOICES = ['nova', 'shimmer', 'alloy', 'onyx'] as const;
 
 export interface MenuDeps {
   /** Translates UI strings for the current language. */
@@ -23,8 +28,11 @@ export interface MenuDeps {
   setContextScope: (scope: ContextScope) => void;
   getLanguage: () => Language;
   setLanguage: (language: Language) => void;
-  getVoiceEngine: () => VoiceEngine;
-  setVoiceEngine: (engine: VoiceEngine) => void;
+  /** 'system' or a natural voice name ('nova', 'shimmer', ...). */
+  getVoiceChoice: () => VoiceChoice;
+  setVoiceChoice: (choice: VoiceChoice) => void;
+  /** Speak a sample IN the focused voice so users hear before choosing. */
+  previewVoice: (choice: VoiceChoice, text: string) => void;
   getTypingVisible: () => boolean;
   setTypingVisible: (visible: boolean) => void;
   getWakeWordEnabled: () => boolean;
@@ -185,28 +193,33 @@ export class NaviMenu {
       },
     });
 
-    const voiceEngine = this.deps.getVoiceEngine();
+    const voiceChoice = this.deps.getVoiceChoice();
     this.addItem({
       label: t('menuVoiceSystem'),
       role: 'menuitemradio',
-      checked: voiceEngine === 'system',
+      checked: voiceChoice === 'system',
+      onFocusPreview: () => this.deps.previewVoice('system', t('voicePreview')),
       onActivate: () => {
-        this.deps.setVoiceEngine('system');
+        this.deps.setVoiceChoice('system');
         this.deps.announce(t('voiceSystemOn'));
         this.refreshChecks();
       },
     });
 
-    this.addItem({
-      label: t('menuVoiceNatural'),
-      role: 'menuitemradio',
-      checked: voiceEngine === 'natural',
-      onActivate: () => {
-        this.deps.setVoiceEngine('natural');
-        this.deps.announce(t('voiceNaturalOn'));
-        this.refreshChecks();
-      },
-    });
+    for (const voice of NATURAL_VOICES) {
+      const name = voice.charAt(0).toUpperCase() + voice.slice(1);
+      this.addItem({
+        label: t('menuVoiceNamed', { name }),
+        role: 'menuitemradio',
+        checked: voiceChoice === voice,
+        onFocusPreview: () => this.deps.previewVoice(voice, t('voicePreview')),
+        onActivate: () => {
+          this.deps.setVoiceChoice(voice);
+          this.deps.announce(t('voiceChosen'));
+          this.refreshChecks();
+        },
+      });
+    }
 
     this.addItem({
       label: t('menuTyping'),
@@ -273,6 +286,8 @@ export class NaviMenu {
     role: string;
     checked?: boolean;
     onActivate: () => void;
+    /** Voice items: sample the voice itself instead of the normal announce. */
+    onFocusPreview?: () => void;
   }): void {
     const button = this.container.ownerDocument.createElement('button');
     button.className = 'navi-menu-item';
@@ -285,7 +300,12 @@ export class NaviMenu {
     button.addEventListener('click', config.onActivate);
     button.addEventListener('focus', () => {
       const index = this.items.indexOf(button);
-      if (index >= 0) this.announceItem(index);
+      if (index < 0) return;
+      if (config.onFocusPreview) {
+        config.onFocusPreview();
+      } else {
+        this.announceItem(index);
+      }
     });
     this.container.appendChild(button);
     this.items.push(button);

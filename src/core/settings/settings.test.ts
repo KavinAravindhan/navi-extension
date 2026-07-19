@@ -44,8 +44,9 @@ describe('loadSettings', () => {
     expect(DEFAULT_SETTINGS.language).toBe('en');
   });
 
-  it('defaults to the free built-in speech engines', () => {
-    expect(DEFAULT_SETTINGS.voiceEngine).toBe('system');
+  it('defaults to the natural Nova voice with browser recognition', () => {
+    expect(DEFAULT_SETTINGS.voiceEngine).toBe('natural');
+    expect(DEFAULT_SETTINGS.naturalVoiceName).toBe('nova');
     expect(DEFAULT_SETTINGS.sttEngine).toBe('browser');
   });
 

@@ -16,7 +16,7 @@ export class OpenAITTSEngine implements SentenceEngine {
 
   constructor(
     private readonly apiKey: string,
-    private readonly voice = 'alloy',
+    private readonly getVoice: () => string = () => 'nova',
   ) {}
 
   speak(
@@ -38,7 +38,7 @@ export class OpenAITTSEngine implements SentenceEngine {
           },
           body: JSON.stringify({
             model: 'gpt-4o-mini-tts',
-            voice: this.voice,
+            voice: this.getVoice(),
             input: text,
             response_format: 'mp3',
           }),
