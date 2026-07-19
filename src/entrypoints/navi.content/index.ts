@@ -471,6 +471,9 @@ ${o.text}`;
   const afterSpeechEnds = (fn: () => void): void => {
     afterIdle = fn;
   };
+  const clearPendingListen = (): void => {
+    afterIdle = null;
+  };
 
   let playerBusy = false;
   let micBusy = false;
@@ -508,9 +511,13 @@ ${o.text}`;
   /** Queued while the menu is open — nothing may talk over the menu. */
   let pendingSpeech: string | null = null;
 
+  /** Whether the current question arrived by voice (drives conversation mode). */
+  let lastInputWasVoice = false;
+
   /** Chat responses: voice mode speaks; SR mode lets the live log announce. */
   const speakResponse = (text: string): void => {
     if (settings.outputMode !== 'voice') return;
+    if (!panel.isOpen) return; // nothing may speak after the panel closes
     if (menu.isOpen) {
       pendingSpeech = text;
       return;
@@ -521,7 +528,13 @@ ${o.text}`;
   // ---- Voice input ------------------------------------------------------
 
   const sttOptions: VoiceRecognitionOptions = {
-    onResult: (transcript) => panel.submitTranscript(transcript),
+    onResult: (transcript) => {
+      const clean = transcript.trim();
+      // Phantom noise / post-close safety: never act on junk transcripts.
+      if (clean.length < 2 || !panel.isOpen) return;
+      lastInputWasVoice = true;
+      panel.submitTranscript(clean);
+    },
     onStateChange: (listening) => {
       micBusy = listening;
       panel.setVoiceButtonState(listening);
@@ -549,8 +562,11 @@ ${o.text}`;
   whisperStt.setLanguage(SPEECH_LANG[settings.language]);
   const whisperAvailable = whisperStt.init();
 
-  // NAVI auto-picks the best microphone — one less menu decision.
-  const activeStt = () => (whisperAvailable ? whisperStt : browserStt);
+  // NAVI auto-picks the microphone: the built-in recognizer for English
+  // (instant results, native silence detection) and Whisper for Indonesian
+  // (much better accuracy there). One less menu decision, less lag.
+  const activeStt = () =>
+    settings.language === 'id' && whisperAvailable ? whisperStt : browserStt;
 
   const stopListening = (): void => {
     if (browserStt.isListening) browserStt.toggle();
@@ -558,6 +574,7 @@ ${o.text}`;
   };
 
   const startListening = (): void => {
+    if (!panel.isOpen) return; // the mic never opens behind a closed panel
     if (activeStt().isListening) return;
     void (async () => {
       try {
@@ -660,6 +677,7 @@ ${o.text}`;
     if (announceOverviewWhenReady) {
       announceOverviewWhenReady = false;
       scanState = 'idle';
+      if (!panel.isOpen) return;
       const failMsg = accountEmail
         ? t('readFailAccount', { email: accountEmail, details })
         : t('readFail', { details });
@@ -672,6 +690,7 @@ ${o.text}`;
     scanState = 'ready';
     if (announceOverviewWhenReady) {
       announceOverviewWhenReady = false;
+      if (!panel.isOpen) return; // she'll introduce it on the next summon
       speakThenListen(`${overview} ${t('whatToKnow')}`);
     }
   }
@@ -793,7 +812,6 @@ ${o.text}`;
 
   // ---- Panel + menu ------------------------------------------------------
 
-  let closingForQuit = false;
   const quitConfirm = new TwoStepConfirm();
 
   const panel = new NaviPanel(
@@ -826,8 +844,9 @@ ${o.text}`;
         menu.hide();
         quitConfirm.reset();
         stopListening();
-        if (!closingForQuit) player.stop();
-        closingForQuit = false;
+        clearPendingListen(); // a stale "listen after speech" must never fire
+        announceOverviewWhenReady = false;
+        player.stop();
         syncWake();
       },
     },
@@ -974,9 +993,18 @@ ${o.text}`;
         speakResponse(msg);
       } else {
         const msg = t('quitFarewell');
-        closingForQuit = true; // keep the farewell playing through close
-        panel.close();
-        announcer.say(msg);
+        panel.addMessage(msg, 'ai');
+        panel.close(); // silences and cancels everything pending
+        if (settings.outputMode === 'voice') {
+          // Instant built-in voice — the goodbye must not lag behind the close.
+          systemVoice.speak(
+            msg,
+            { rate: settings.speechRate, lang: SPEECH_LANG[settings.language] },
+            { onEnd: () => {}, onError: () => {} },
+          );
+        } else {
+          announcer.say(msg);
+        }
       }
     },
     onScreenReaderMode: () => {
@@ -1030,15 +1058,34 @@ ${o.text}`;
   // ---- Conversation ------------------------------------------------------
 
   async function handleUserMessage(text: string): Promise<void> {
+    const cameFromVoice = lastInputWasVoice;
+    lastInputWasVoice = false;
     player.stop();
 
     panel.addMessage(text, 'user');
     panel.addMessage(t('thinking'), 'ai', 'navi-thinking');
 
+    // Instant acknowledgment on the zero-latency built-in voice, so the
+    // AI thinking time never feels dead.
+    if (cameFromVoice && settings.outputMode === 'voice') {
+      systemVoice.speak(
+        t('ack'),
+        { rate: settings.speechRate, lang: SPEECH_LANG[settings.language] },
+        { onEnd: () => {}, onError: () => {} },
+      );
+    }
+
     const aiResponse = await llm.sendMessage(text);
 
     panel.removeThinking();
     panel.addMessage(aiResponse, 'ai');
+
+    // Conversation mode: after a spoken answer to a spoken question the mic
+    // reopens by itself — no "Hey NAVI" for follow-ups. Staying quiet ends
+    // the conversation and the wake word takes over again.
+    if (cameFromVoice && settings.outputMode === 'voice' && panel.isOpen) {
+      afterSpeechEnds(() => startListening());
+    }
     speakResponse(aiResponse);
 
     // Cross-app memory: other tabs can recall this answer (NAVI-019 ph. 1).
