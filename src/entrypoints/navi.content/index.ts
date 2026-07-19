@@ -477,14 +477,28 @@ ${o.text}`;
 
   let playerBusy = false;
   let micBusy = false;
+  let wakeStartTimer: ReturnType<typeof setTimeout> | null = null;
   const syncWake = (): void => {
     const shouldRun =
       settings.wakeWordEnabled && wakeAvailable && !playerBusy && !micBusy;
-    if (shouldRun) {
-      wake.start();
-    } else {
+    if (!shouldRun) {
+      if (wakeStartTimer !== null) {
+        clearTimeout(wakeStartTimer);
+        wakeStartTimer = null;
+      }
       wake.stop();
+      return;
     }
+    if (wake.isRunning || wakeStartTimer !== null) return;
+    // Give the recognition engine a beat to release after mic use —
+    // restarting instantly used to throw and leave the wake word dead
+    // (the "Hey NAVI doesn't work after Option+Q" bug).
+    wakeStartTimer = setTimeout(() => {
+      wakeStartTimer = null;
+      if (settings.wakeWordEnabled && wakeAvailable && !playerBusy && !micBusy) {
+        wake.start();
+      }
+    }, 300);
   };
 
   const player = new SpeechPlayer(

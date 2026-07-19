@@ -12,6 +12,8 @@ export class WakeWordListener {
   private recognition: any = null;
   private running = false;
   private lang = 'en-US';
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private startAttempts = 0;
 
   constructor(private readonly onWake: () => void) {}
 
@@ -71,13 +73,29 @@ export class WakeWordListener {
     this.recognition = recognition;
     try {
       recognition.start();
+      this.startAttempts = 0;
     } catch {
+      // Chrome allows ONE recognition per page: right after the mic (or a
+      // previous loop) stops, the engine may still be releasing and start()
+      // throws. Retry shortly instead of giving up — swallowing this used
+      // to leave the wake word permanently dead after quitting NAVI.
       this.running = false;
       this.recognition = null;
+      if (this.startAttempts >= 10) return; // engine truly unavailable
+      this.startAttempts += 1;
+      this.retryTimer = setTimeout(() => {
+        this.retryTimer = null;
+        this.start();
+      }, 400);
     }
   }
 
   stop(): void {
+    if (this.retryTimer !== null) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+    this.startAttempts = 0;
     this.running = false;
     const recognition = this.recognition;
     this.recognition = null;
