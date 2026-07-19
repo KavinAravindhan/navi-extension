@@ -4,7 +4,6 @@ import type {
   ContextScope,
   FontSize,
   OutputMode,
-  SttEngine,
   VoiceEngine,
 } from '@/core/settings/settings';
 
@@ -26,10 +25,12 @@ export interface MenuDeps {
   setLanguage: (language: Language) => void;
   getVoiceEngine: () => VoiceEngine;
   setVoiceEngine: (engine: VoiceEngine) => void;
-  getSttEngine: () => SttEngine;
-  setSttEngine: (engine: SttEngine) => void;
+  getTypingVisible: () => boolean;
+  setTypingVisible: (visible: boolean) => void;
   getWakeWordEnabled: () => boolean;
   setWakeWordEnabled: (enabled: boolean) => void;
+  /** The panel hides the chat while the menu is open (rendering fix). */
+  onVisibilityChange?: (open: boolean) => void;
   /** Replays the first-run walkthrough (NAVI-012). */
   onPlayTour: () => void;
   /** Called after the menu closes (controller restores focus). */
@@ -78,6 +79,7 @@ export class NaviMenu {
   show(): void {
     this.render();
     this.container.style.display = 'flex';
+    this.deps.onVisibilityChange?.(true);
     this.deps.announce(this.deps.t('menuOpened'));
     this.focusItem(0, { silent: true });
   }
@@ -87,6 +89,7 @@ export class NaviMenu {
     this.container.style.display = 'none';
     this.container.innerHTML = '';
     this.items = [];
+    this.deps.onVisibilityChange?.(false);
     this.deps.onClose?.();
   }
 
@@ -205,25 +208,14 @@ export class NaviMenu {
       },
     });
 
-    const sttEngine = this.deps.getSttEngine();
     this.addItem({
-      label: t('menuMicBrowser'),
-      role: 'menuitemradio',
-      checked: sttEngine === 'browser',
+      label: t('menuTyping'),
+      role: 'menuitemcheckbox',
+      checked: this.deps.getTypingVisible(),
       onActivate: () => {
-        this.deps.setSttEngine('browser');
-        this.deps.announce(t('micBrowserOn'));
-        this.refreshChecks();
-      },
-    });
-
-    this.addItem({
-      label: t('menuMicWhisper'),
-      role: 'menuitemradio',
-      checked: sttEngine === 'whisper',
-      onActivate: () => {
-        this.deps.setSttEngine('whisper');
-        this.deps.announce(t('micWhisperOn'));
+        const visible = !this.deps.getTypingVisible();
+        this.deps.setTypingVisible(visible);
+        this.deps.announce(visible ? t('typingShown') : t('typingHidden'));
         this.refreshChecks();
       },
     });

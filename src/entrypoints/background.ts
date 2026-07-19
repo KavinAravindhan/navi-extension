@@ -24,6 +24,17 @@ export default defineBackground(() => {
         return respond(handleGetWorkbook(message as never));
       case 'readRange':
         return respond(handleReadRange(message as never));
+      case 'getShortcut':
+        // What is the open-NAVI key actually bound to on THIS machine?
+        // (Chrome can silently fail to bind it — NAVI speaks the truth.)
+        return respond(
+          new Promise((resolve) => {
+            chrome.commands.getAll((commands) => {
+              const command = commands.find((c) => c.name === 'open-navi');
+              resolve({ shortcut: command?.shortcut ?? null });
+            });
+          }),
+        );
     }
   });
 

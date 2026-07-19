@@ -72,14 +72,33 @@ describe('NaviPanel', () => {
     expect(byId('navi-messages').getAttribute('aria-live')).toBe('off');
   });
 
-  it('open() goes straight to the chat, fires onOpen, and focuses the input', () => {
+  it('open() fires onOpen and focuses the panel (typing box hidden by default)', () => {
     panel.open();
 
     expect(byId('navi-panel').style.display).toBe('flex');
     expect(byId('navi-icon').style.display).toBe('none');
     expect(callbacks.onOpen).toHaveBeenCalledOnce();
-    expect(document.activeElement?.id).toBe('navi-text-input');
+    expect(byId('navi-input-area').style.display).toBe('none');
+    expect(document.activeElement?.id).toBe('navi-panel');
     expect(panel.isOpen).toBe(true);
+  });
+
+  it('setInputVisible(true) reveals the typing box and open() focuses it', () => {
+    panel.setInputVisible(true);
+    panel.open();
+
+    expect(byId('navi-input-area').style.display).toBe('flex');
+    expect(document.activeElement?.id).toBe('navi-text-input');
+  });
+
+  it('setMenuMode(true) hands the whole panel to the menu', () => {
+    panel.setInputVisible(true);
+    panel.setMenuMode(true);
+    expect(byId('navi-messages').style.display).toBe('none');
+    expect(byId('navi-input-area').style.display).toBe('none');
+
+    panel.setMenuMode(false);
+    expect(byId('navi-messages').style.display).toBe('flex');
   });
 
   it('there is no font picker gate anymore', () => {

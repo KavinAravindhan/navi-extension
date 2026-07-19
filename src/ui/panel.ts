@@ -66,6 +66,7 @@ export class NaviPanel {
     // without NAVI trapping focus away from the spreadsheet.
     naviPanel.setAttribute('role', 'complementary');
     naviPanel.setAttribute('aria-label', 'NAVI Assistant');
+    naviPanel.tabIndex = -1;
     naviPanel.innerHTML = `
     <div id="navi-header">
       <div style="display: flex; align-items: center; gap: 8px;">
@@ -82,7 +83,7 @@ export class NaviPanel {
     <div id="navi-menu" style="display: none;"></div>
 
     <div id="navi-messages" role="log" aria-live="off" aria-label="Conversation with NAVI"></div>
-    <div id="navi-input-area">
+    <div id="navi-input-area" style="display: none;">
       <input
         type="text"
         id="navi-text-input"
@@ -156,6 +157,31 @@ export class NaviPanel {
     this.focusInput();
   }
 
+  /**
+   * Shows/hides the typing box (hidden by default — voice-first; the menu
+   * switch brings it back for braille-keyboard users and sighted helpers).
+   */
+  setInputVisible(visible: boolean): void {
+    this.byId('navi-input-area').style.display = visible ? 'flex' : 'none';
+  }
+
+  get isInputVisible(): boolean {
+    return this.byId('navi-input-area').style.display !== 'none';
+  }
+
+  /**
+   * While the menu is open it takes over the whole panel (fixes the clipped
+   * rendering) — the conversation area hides until it closes.
+   */
+  setMenuMode(open: boolean): void {
+    this.byId('navi-messages').style.display = open ? 'none' : 'flex';
+    if (open) {
+      this.byId('navi-input-area').style.display = 'none';
+    }
+    // Re-apply the user's typing-box preference when the menu closes: the
+    // controller calls setInputVisible right after us.
+  }
+
   /** Closes the panel back to the floating icon and fires onClose. */
   close(): void {
     this.byId('navi-panel').style.display = 'none';
@@ -182,7 +208,11 @@ export class NaviPanel {
   }
 
   focusInput(): void {
-    this.byId<HTMLInputElement>('navi-text-input').focus();
+    if (this.isInputVisible) {
+      this.byId<HTMLInputElement>('navi-text-input').focus();
+    } else {
+      this.byId('navi-panel').focus();
+    }
   }
 
   /** The container the NaviMenu renders into. */

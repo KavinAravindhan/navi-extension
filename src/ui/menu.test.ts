@@ -5,7 +5,6 @@ import type {
   ContextScope,
   FontSize,
   OutputMode,
-  SttEngine,
   VoiceEngine,
 } from '@/core/settings/settings';
 import { NaviMenu, type MenuDeps } from './menu';
@@ -20,13 +19,14 @@ describe('NaviMenu', () => {
     contextScope: ContextScope;
     language: Language;
     voiceEngine: VoiceEngine;
-    sttEngine: SttEngine;
     wakeWordEnabled: boolean;
+    typingVisible: boolean;
   };
   let deps: MenuDeps & {
     announce: ReturnType<typeof vi.fn<(text: string) => void>>;
     onClose: ReturnType<typeof vi.fn<() => void>>;
   };
+
   let menu: NaviMenu;
 
   const items = () =>
@@ -45,8 +45,8 @@ describe('NaviMenu', () => {
       contextScope: 'tab',
       language: 'en',
       voiceEngine: 'system',
-      sttEngine: 'browser',
       wakeWordEnabled: false,
+      typingVisible: false,
     };
     deps = {
       t: makeT(() => state.language),
@@ -76,9 +76,9 @@ describe('NaviMenu', () => {
       setVoiceEngine: vi.fn((engine: VoiceEngine) => {
         state.voiceEngine = engine;
       }),
-      getSttEngine: () => state.sttEngine,
-      setSttEngine: vi.fn((engine: SttEngine) => {
-        state.sttEngine = engine;
+      getTypingVisible: () => state.typingVisible,
+      setTypingVisible: vi.fn((visible: boolean) => {
+        state.typingVisible = visible;
       }),
       getWakeWordEnabled: () => state.wakeWordEnabled,
       setWakeWordEnabled: vi.fn((enabled: boolean) => {
@@ -117,8 +117,7 @@ describe('NaviMenu', () => {
       'Language: Bahasa Indonesia',
       'Voice: System (fast)',
       'Voice: Natural (OpenAI)',
-      'Microphone: Standard',
-      'Microphone: Whisper (OpenAI)',
+      'Show the typing box',
       'Wake word: "Hey NAVI"',
       'Greeting when NAVI opens',
       'Speech speed: 1.25',
@@ -159,7 +158,7 @@ describe('NaviMenu', () => {
     expect(menu.isOpen).toBe(false); // menu closes so the tour is audible
   });
 
-  it('switching voice and microphone engines persists and announces', () => {
+  it('switching the voice engine persists and announces', () => {
     menu.show();
 
     itemByLabel('Voice: Natural (OpenAI)').click();
@@ -167,12 +166,29 @@ describe('NaviMenu', () => {
     expect(deps.announce).toHaveBeenCalledWith(
       expect.stringContaining('Natural voice on'),
     );
+  });
 
-    itemByLabel('Microphone: Whisper (OpenAI)').click();
-    expect(deps.setSttEngine).toHaveBeenCalledWith('whisper');
-    expect(
-      itemByLabel('Microphone: Whisper (OpenAI)').getAttribute('aria-checked'),
-    ).toBe('true');
+  it('the typing box toggle flips visibility and announces it', () => {
+    menu.show();
+
+    itemByLabel('Show the typing box').click();
+    expect(deps.setTypingVisible).toHaveBeenCalledWith(true);
+    expect(deps.announce).toHaveBeenCalledWith('Typing box shown.');
+
+    itemByLabel('Show the typing box').click();
+    expect(deps.setTypingVisible).toHaveBeenCalledWith(false);
+    expect(deps.announce).toHaveBeenCalledWith('Typing box hidden.');
+  });
+
+  it('reports open/close so the panel can hand over its space', () => {
+    const visibility: boolean[] = [];
+    deps.onVisibilityChange = vi.fn((open: boolean) => visibility.push(open));
+    menu = new NaviMenu(container, deps);
+
+    menu.show();
+    menu.hide();
+
+    expect(visibility).toEqual([true, false]);
   });
 
   it('switching to Indonesian announces the confirmation IN Indonesian', () => {
