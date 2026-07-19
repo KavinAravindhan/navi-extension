@@ -65,10 +65,48 @@ export interface ReadRangeRequest {
   spreadsheetId: string;
   /** A1 range or a (quoted) sheet title for the whole tab. */
   range: string;
+  /** FORMULA returns formulas instead of values (image detection). */
+  render?: 'FORMATTED_VALUE' | 'FORMULA';
 }
 
 export interface ReadRangeResponse {
   success: boolean;
   error?: string;
   values?: (string | number | null)[][];
+}
+
+export const CREATE_CHART_ACTION = 'createChart' as const;
+
+export interface CreateChartRequest {
+  action: typeof CREATE_CHART_ACTION;
+  spreadsheetId: string;
+  sheetId: number;
+  chartType: 'LINE' | 'COLUMN' | 'BAR' | 'PIE';
+  title: string;
+  gridRange: {
+    startRowIndex: number;
+    endRowIndex: number;
+    startColumnIndex: number;
+    endColumnIndex: number;
+  };
+}
+
+export interface CreateChartResponse {
+  success: boolean;
+  error?: string;
+}
+
+export const READ_FORMATTING_ACTION = 'readFormatting' as const;
+
+export interface ReadFormattingRequest {
+  action: typeof READ_FORMATTING_ACTION;
+  spreadsheetId: string;
+  /** Quoted-sheet A1 range, e.g. 'Budget'!A1:D20 */
+  range: string;
+}
+
+export interface ReadFormattingResponse {
+  success: boolean;
+  error?: string;
+  summary?: string;
 }

@@ -23,16 +23,25 @@ import { VoiceRecognition, type VoiceRecognitionOptions } from '@/core/speech/st
 import { WakeWordListener } from '@/core/speech/wakeWord';
 import { WebSpeechEngine } from '@/core/speech/webSpeechEngine';
 import { WhisperRecognition } from '@/core/speech/whisperStt';
+import { parseA1Range } from '@/core/workbook/a1';
+import { findImageCells } from '@/core/workbook/formatting';
 import {
   buildWorkbookContext,
   quoteSheetTitle,
   type TabSection,
+  type WorkbookTab,
 } from '@/core/workbook/model';
 import { buildSpokenOverview, spokenShortcut } from '@/core/workbook/overview';
 import { getActiveCellA1 } from '@/platform/sheets/activeCell';
 import { requestCellEdit } from '@/platform/sheets/editCell';
 import { getActiveSheetName } from '@/platform/sheets/location';
-import { requestRange, requestWorkbook } from '@/platform/sheets/workbookGateway';
+import { navigateToCell, navigateToTab } from '@/platform/sheets/navigate';
+import {
+  requestCreateChart,
+  requestFormatting,
+  requestRange,
+  requestWorkbook,
+} from '@/platform/sheets/workbookGateway';
 import { NaviMenu } from '@/ui/menu';
 import { NaviPanel } from '@/ui/panel';
 
@@ -120,6 +129,158 @@ async function initializeNavi(): Promise<void> {
         .slice(0, 100)
         .map((row, i) => `Row ${i + 1}: ${row.map((c) => c ?? '').join(' | ')}`)
         .join('\n');
+    },
+  );
+
+  // Tabs cached by the pre-scan; navigation/chart tools resolve names here.
+  let knownTabs: WorkbookTab[] = [];
+
+  const findTab = (name?: string): WorkbookTab | undefined => {
+    if (knownTabs.length === 0) return undefined;
+    if (!name) {
+      const active = getActiveSheetName();
+      return knownTabs.find((tab) => tab.title === active) ?? knownTabs[0];
+    }
+    const lower = name.toLowerCase();
+    return (
+      knownTabs.find((tab) => tab.title.toLowerCase() === lower) ??
+      knownTabs.find((tab) => tab.title.toLowerCase().includes(lower))
+    );
+  };
+
+  tools.register(
+    {
+      name: 'switch_tab',
+      description:
+        'Switch which sheet tab the user is looking at — the screen actually changes.',
+      parameters: {
+        type: 'object',
+        properties: { tabName: { type: 'string', description: 'Tab name, e.g. Scenarios' } },
+        required: ['tabName'],
+      },
+    },
+    async (args) => {
+      const tab = findTab(String(args.tabName ?? ''));
+      if (!tab) {
+        return `No tab named "${args.tabName}". Available tabs: ${knownTabs
+          .map((t) => t.title)
+          .join(', ')}.`;
+      }
+      navigateToTab(tab.sheetId);
+      rescan(); // context follows the newly visible tab
+      return `Switched the view to tab "${tab.title}".`;
+    },
+  );
+
+  tools.register(
+    {
+      name: 'go_to_cell',
+      description:
+        "Move the user's selection to a cell or range — the screen scrolls there.",
+      parameters: {
+        type: 'object',
+        properties: {
+          cell: { type: 'string', description: 'A1 cell or range, e.g. B15 or A1:C3' },
+          tabName: { type: 'string', description: 'Optional tab name' },
+        },
+        required: ['cell'],
+      },
+    },
+    async (args) => {
+      const tab = findTab(args.tabName ? String(args.tabName) : undefined);
+      if (!tab) return 'I could not resolve which tab to use.';
+      const cell = String(args.cell ?? '').trim().toUpperCase();
+      if (!parseA1Range(cell)) return `"${cell}" is not a valid cell reference.`;
+      navigateToCell(tab.sheetId, cell);
+      return `Moved the selection to ${cell} on tab "${tab.title}".`;
+    },
+  );
+
+  tools.register(
+    {
+      name: 'create_chart',
+      description:
+        'Insert a chart into the sheet from a data range. First row = headers, first column = category labels.',
+      parameters: {
+        type: 'object',
+        properties: {
+          range: { type: 'string', description: 'Data range in A1, e.g. A1:B10' },
+          chartType: { type: 'string', enum: ['LINE', 'COLUMN', 'BAR', 'PIE'] },
+          title: { type: 'string' },
+          tabName: { type: 'string', description: 'Optional tab name' },
+        },
+        required: ['range', 'chartType', 'title'],
+      },
+    },
+    async (args) => {
+      const tab = findTab(args.tabName ? String(args.tabName) : undefined);
+      const gridRange = parseA1Range(String(args.range ?? ''));
+      if (!tab || !gridRange) return 'Invalid tab or range for the chart.';
+      const requested = String(args.chartType ?? '').toUpperCase();
+      const chartType = (['LINE', 'COLUMN', 'BAR', 'PIE'] as const).find(
+        (type) => type === requested,
+      ) ?? 'COLUMN';
+      const title = String(args.title ?? 'Chart');
+      const response = await requestCreateChart({
+        sheetId: tab.sheetId,
+        chartType,
+        title,
+        gridRange,
+      });
+      return response.success
+        ? `Created a ${chartType.toLowerCase()} chart titled "${title}" next to the data on "${tab.title}".`
+        : `Chart creation failed: ${response.error}. The user may lack edit access.`;
+    },
+  );
+
+  tools.register(
+    {
+      name: 'read_formatting',
+      description:
+        'Describe cell formatting (bold, italic, highlight colors, merged cells) for a range.',
+      parameters: {
+        type: 'object',
+        properties: {
+          range: { type: 'string', description: 'A1 range, e.g. A1:D20' },
+          tabName: { type: 'string', description: 'Optional tab name' },
+        },
+        required: ['range'],
+      },
+    },
+    async (args) => {
+      const tab = findTab(args.tabName ? String(args.tabName) : undefined);
+      const rangePart = String(args.range ?? '').trim().toUpperCase();
+      if (!tab || !parseA1Range(rangePart)) return 'Invalid tab or range.';
+      const response = await requestFormatting(
+        `${quoteSheetTitle(tab.title)}!${rangePart}`,
+      );
+      return response.success
+        ? (response.summary ?? 'No formatting information returned.')
+        : `Formatting read failed: ${response.error}`;
+    },
+  );
+
+  tools.register(
+    {
+      name: 'find_images',
+      description:
+        'List cells containing embedded images or sparklines (IMAGE/SPARKLINE formulas) on a tab.',
+      parameters: {
+        type: 'object',
+        properties: { tabName: { type: 'string', description: 'Optional tab name' } },
+      },
+    },
+    async (args) => {
+      const tab = findTab(args.tabName ? String(args.tabName) : undefined);
+      if (!tab) return 'I could not resolve which tab to use.';
+      const response = await requestRange(quoteSheetTitle(tab.title), 'FORMULA');
+      if (!response.success) return `Read failed: ${response.error}`;
+      const cells = findImageCells(response.values ?? []);
+      const apiNote =
+        "Note: floating pictures over the grid are not exposed by Google's API, so they cannot be detected.";
+      return cells.length > 0
+        ? `Cells with embedded images or sparklines on "${tab.title}": ${cells.join(', ')}. ${apiNote}`
+        : `No embedded IMAGE or SPARKLINE formulas found on "${tab.title}". ${apiNote}`;
     },
   );
 
@@ -287,12 +448,16 @@ async function initializeNavi(): Promise<void> {
       if (announceOverviewWhenReady) {
         announceOverviewWhenReady = false;
         scanState = 'idle'; // next summon retries
-        speakThenListen(t('readFail', { details: scanError }), { listen: false });
+        const failMsg = accountEmail
+          ? t('readFailAccount', { email: accountEmail, details: scanError })
+          : t('readFail', { details: scanError });
+        speakThenListen(failMsg, { listen: false });
       }
       return;
     }
 
     const tabs = workbook.tabs;
+    knownTabs = tabs;
     const domTabName = getActiveSheetName();
     const activeTabTitle =
       tabs.find((tab) => tab.title === domTabName)?.title ?? tabs[0].title;
@@ -602,6 +767,16 @@ async function initializeNavi(): Promise<void> {
   chrome.runtime.onMessage.addListener((message: { action?: string }) => {
     if (message?.action === 'openNavi') panel.open();
   });
+
+  // Which Google account is NAVI using? Spoken in read-failure guidance.
+  let accountEmail: string | null = null;
+  chrome.runtime.sendMessage(
+    { action: 'getProfile' },
+    (response: { email?: string | null } | undefined) => {
+      void chrome.runtime.lastError;
+      accountEmail = response?.email ?? null;
+    },
+  );
 
   // What is Alt+N really bound to on this machine? Spoken in the tour.
   let shortcutPhrase: string | null = null;

@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { installChromeMock } from '@/test/chrome';
-import { handleEditCell, handleGetWorkbook, handleReadRange } from './sheetsApi';
+import {
+  handleCreateChart,
+  handleEditCell,
+  handleGetWorkbook,
+  handleReadFormatting,
+  handleReadRange,
+} from './sheetsApi';
 import type { EditCellRequest } from './messages';
 
 const chromeMock = installChromeMock();
@@ -210,5 +216,169 @@ describe('handleReadRange', () => {
     expect(
       await handleReadRange({ action: 'readRange', spreadsheetId: 'SID', range: 'A1' }),
     ).toEqual({ success: false, error: 'OAuth2 revoked' });
+  });
+
+  it('passes the FORMULA render option through', async () => {
+    chromeMock.runtime.lastError = undefined;
+    chromeMock.identity.getAuthToken.mockImplementation(
+      (_opts: unknown, cb: (token?: string) => void) => cb('tok-123'),
+    );
+    mockFetch.mockResolvedValue({ json: () => Promise.resolve({ values: [] }) });
+
+    await handleReadRange({
+      action: 'readRange',
+      spreadsheetId: 'SID',
+      range: 'A1',
+      render: 'FORMULA',
+    });
+
+    expect(mockFetch.mock.calls[0][0]).toContain('valueRenderOption=FORMULA');
+  });
+});
+
+describe('handleCreateChart', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    chromeMock.runtime.lastError = undefined;
+    chromeMock.identity.getAuthToken.mockImplementation(
+      (_opts: unknown, cb: (token?: string) => void) => cb('tok-123'),
+    );
+  });
+
+  const GRID = {
+    startRowIndex: 0,
+    endRowIndex: 10,
+    startColumnIndex: 0,
+    endColumnIndex: 2,
+  };
+
+  it('POSTs an addChart batchUpdate anchored beside the data', async () => {
+    mockFetch.mockResolvedValue({ json: () => Promise.resolve({ replies: [{}] }) });
+
+    const result = await handleCreateChart({
+      action: 'createChart',
+      spreadsheetId: 'SID',
+      sheetId: 7,
+      chartType: 'LINE',
+      title: 'Revenue',
+      gridRange: GRID,
+    });
+
+    expect(result).toEqual({ success: true });
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe('https://sheets.googleapis.com/v4/spreadsheets/SID:batchUpdate');
+    const body = JSON.parse(init.body);
+    const chart = body.requests[0].addChart.chart;
+    expect(chart.spec.title).toBe('Revenue');
+    expect(chart.spec.basicChart.chartType).toBe('LINE');
+    expect(chart.spec.basicChart.series).toHaveLength(1); // B column
+    expect(chart.position.overlayPosition.anchorCell).toEqual({
+      sheetId: 7,
+      rowIndex: 0,
+      columnIndex: 3, // one right of the data
+    });
+  });
+
+  it('uses the pie spec for PIE charts', async () => {
+    mockFetch.mockResolvedValue({ json: () => Promise.resolve({}) });
+
+    await handleCreateChart({
+      action: 'createChart',
+      spreadsheetId: 'SID',
+      sheetId: 7,
+      chartType: 'PIE',
+      title: 'Split',
+      gridRange: GRID,
+    });
+
+    const chart = JSON.parse(mockFetch.mock.calls[0][1].body).requests[0].addChart.chart;
+    expect(chart.spec.pieChart).toBeDefined();
+    expect(chart.spec.basicChart).toBeUndefined();
+  });
+
+  it('surfaces API errors', async () => {
+    mockFetch.mockResolvedValue({
+      json: () => Promise.resolve({ error: { message: 'no edit access' } }),
+    });
+
+    expect(
+      await handleCreateChart({
+        action: 'createChart',
+        spreadsheetId: 'SID',
+        sheetId: 7,
+        chartType: 'COLUMN',
+        title: 'X',
+        gridRange: GRID,
+      }),
+    ).toEqual({ success: false, error: 'no edit access' });
+  });
+});
+
+describe('handleReadFormatting', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    chromeMock.runtime.lastError = undefined;
+    chromeMock.identity.getAuthToken.mockImplementation(
+      (_opts: unknown, cb: (token?: string) => void) => cb('tok-123'),
+    );
+  });
+
+  it('summarizes grid formatting from the API response', async () => {
+    mockFetch.mockResolvedValue({
+      json: () =>
+        Promise.resolve({
+          sheets: [
+            {
+              properties: { title: 'Budget' },
+              merges: [{}],
+              data: [
+                {
+                  startRow: 0,
+                  startColumn: 0,
+                  rowData: [
+                    {
+                      values: [
+                        {
+                          formattedValue: 'Header',
+                          effectiveFormat: {
+                            textFormat: { bold: true },
+                            backgroundColor: { red: 1, green: 1, blue: 0 },
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        }),
+    });
+
+    const result = await handleReadFormatting({
+      action: 'readFormatting',
+      spreadsheetId: 'SID',
+      range: "'Budget'!A1:B2",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.summary).toContain('Bold cells: A1.');
+    expect(result.summary).toContain('#ffff00');
+    expect(result.summary).toContain('1 merged cell range.');
+    expect(mockFetch.mock.calls[0][0]).toContain('includeGridData=true');
+  });
+
+  it('surfaces API errors', async () => {
+    mockFetch.mockResolvedValue({
+      json: () => Promise.resolve({ error: { message: 'not found' } }),
+    });
+
+    expect(
+      await handleReadFormatting({
+        action: 'readFormatting',
+        spreadsheetId: 'SID',
+        range: 'A1',
+      }),
+    ).toEqual({ success: false, error: 'not found' });
   });
 });
