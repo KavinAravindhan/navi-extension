@@ -113,6 +113,35 @@ describe('OpenAITTSEngine', () => {
     expect(onEnd).not.toHaveBeenCalled();
   });
 
+  it('prefetch caches the audio so speak() needs no second fetch', async () => {
+    mockFetch.mockResolvedValue(makeAudioResponse());
+
+    engine.prefetch('Hello there.', { rate: 1, lang: 'en-US' });
+    await flush();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    engine.speak('Hello there.', { rate: 1, lang: 'en-US' }, { onEnd, onError });
+    await flush();
+
+    expect(mockFetch).toHaveBeenCalledTimes(1); // reused the prefetched audio
+    expect(FakeAudio.instances).toHaveLength(1);
+    expect(FakeAudio.instances[0].play).toHaveBeenCalled();
+  });
+
+  it('a failed prefetch is not cached — speak retries the fetch', async () => {
+    mockFetch.mockRejectedValueOnce(new Error('offline'));
+    engine.prefetch('Hi.', { rate: 1, lang: 'en-US' });
+    await flush();
+
+    mockFetch.mockResolvedValue(makeAudioResponse());
+    engine.speak('Hi.', { rate: 1, lang: 'en-US' }, { onEnd, onError });
+    await flush();
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(onError).not.toHaveBeenCalled();
+    expect(FakeAudio.instances).toHaveLength(1);
+  });
+
   it('network failures surface as onError', async () => {
     mockFetch.mockRejectedValue(new Error('offline'));
 

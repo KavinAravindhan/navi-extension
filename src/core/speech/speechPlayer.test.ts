@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { installFakeSpeech, type FakeSpeechSynthesis } from '@/test/speech';
-import { SpeechPlayer, type PlaybackStatus } from './speechPlayer';
+import {
+  SpeechPlayer,
+  type PlaybackStatus,
+  type SentenceEngineEvents,
+} from './speechPlayer';
 
 describe('SpeechPlayer', () => {
   let synth: FakeSpeechSynthesis;
@@ -193,6 +197,29 @@ describe('SpeechPlayer', () => {
   it('strips markdown before speaking', () => {
     player.speak('**Bold** and `code`.');
     expect(synth.current?.text).toBe('Bold and code.');
+  });
+
+  it('prefetches the NEXT sentence while the current one speaks', () => {
+    const spoken: string[] = [];
+    const prefetched: string[] = [];
+    let engineEvents: SentenceEngineEvents | null = null;
+    const engine = {
+      speak: (text: string, _o: unknown, events: SentenceEngineEvents) => {
+        spoken.push(text);
+        engineEvents = events;
+      },
+      cancel: () => {},
+      prefetch: (text: string) => prefetched.push(text),
+    };
+    const piped = new SpeechPlayer(1.0, {}, () => engine);
+
+    piped.speak('One. Two. Three.');
+    expect(spoken).toEqual(['One.']);
+    expect(prefetched).toEqual(['Two.']); // fetched ahead, no gap later
+
+    engineEvents!.onEnd();
+    expect(spoken).toEqual(['One.', 'Two.']);
+    expect(prefetched).toEqual(['Two.', 'Three.']);
   });
 
   it('setLanguage switches the utterance language and re-picks the voice', () => {

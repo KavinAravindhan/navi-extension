@@ -31,4 +31,8 @@ export class FallbackSentenceEngine implements SentenceEngine {
     this.primary.cancel();
     this.fallback.cancel();
   }
+
+  prefetch(text: string, opts: { rate: number; lang: string }): void {
+    this.primary.prefetch?.(text, opts);
+  }
 }

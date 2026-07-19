@@ -24,6 +24,8 @@ export interface SentenceEngine {
     events: SentenceEngineEvents,
   ): void;
   cancel(): void;
+  /** Optional: start fetching audio for an upcoming sentence (latency). */
+  prefetch?(text: string, opts: { rate: number; lang: string }): void;
 }
 
 /**
@@ -158,6 +160,11 @@ export class SpeechPlayer {
     const generation = ++this.generation;
     const engine = this.getEngine();
     this.activeEngine = engine;
+
+    // Pipeline: fetch the NEXT sentence's audio while this one plays, so
+    // natural-voice answers flow without gaps between sentences.
+    const next = this.sentences[this.index + 1];
+    if (next) engine.prefetch?.(next, { rate: this.rate, lang: this.speechLang });
 
     engine.speak(
       this.sentences[this.index],

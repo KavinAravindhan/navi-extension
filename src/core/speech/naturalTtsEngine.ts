@@ -13,6 +13,8 @@ export class OpenAITTSEngine implements SentenceEngine {
   private objectUrl: string | null = null;
   /** Identity token: any cancel()/new speak() invalidates in-flight work. */
   private token: object = {};
+  /** Next-sentence audio fetched ahead of time (kills inter-sentence gaps). */
+  private prefetchCache = new Map<string, Promise<Blob>>();
 
   constructor(
     private readonly apiKey: string,
@@ -30,25 +32,11 @@ export class OpenAITTSEngine implements SentenceEngine {
 
     void (async () => {
       try {
-        const response = await fetch(OPENAI_TTS_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.apiKey}`,
-          },
-          body: JSON.stringify({
-            model: 'gpt-4o-mini-tts',
-            voice: this.getVoice(),
-            input: text,
-            response_format: 'mp3',
-          }),
-        });
+        const key = this.cacheKey(text);
+        const cached = this.prefetchCache.get(key);
+        if (cached) this.prefetchCache.delete(key);
 
-        if (!response.ok) {
-          throw new Error(`natural voice request failed (${response.status})`);
-        }
-
-        const blob = await response.blob();
+        const blob = await (cached ?? this.fetchAudio(text));
         if (this.token !== token) return; // cancelled while fetching
 
         const url = URL.createObjectURL(blob);
@@ -75,6 +63,43 @@ export class OpenAITTSEngine implements SentenceEngine {
         events.onError((error as Error).message);
       }
     })();
+  }
+
+  /** Kick off the audio fetch for an upcoming sentence. */
+  prefetch(text: string, _opts: { rate: number; lang: string }): void {
+    const key = this.cacheKey(text);
+    if (this.prefetchCache.has(key)) return;
+    const promise = this.fetchAudio(text);
+    promise.catch(() => this.prefetchCache.delete(key)); // never cache failures
+    this.prefetchCache.set(key, promise);
+    if (this.prefetchCache.size > 4) {
+      const oldest = this.prefetchCache.keys().next().value;
+      if (oldest) this.prefetchCache.delete(oldest);
+    }
+  }
+
+  private cacheKey(text: string): string {
+    return `${this.getVoice()}::${text}`;
+  }
+
+  private async fetchAudio(text: string): Promise<Blob> {
+    const response = await fetch(OPENAI_TTS_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini-tts',
+        voice: this.getVoice(),
+        input: text,
+        response_format: 'mp3',
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`natural voice request failed (${response.status})`);
+    }
+    return response.blob();
   }
 
   cancel(): void {

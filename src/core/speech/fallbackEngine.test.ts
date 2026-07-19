@@ -69,6 +69,18 @@ describe('FallbackSentenceEngine', () => {
     expect(onError).toHaveBeenCalledWith('no voices');
   });
 
+  it('prefetch goes to the primary engine only', () => {
+    const primary = Object.assign(makeEngine(), {
+      prefetch: vi.fn<(text: string, opts: { rate: number; lang: string }) => void>(),
+    });
+    const fallback = makeEngine();
+    const engine = new FallbackSentenceEngine(primary, fallback);
+
+    engine.prefetch('Next sentence.', OPTS);
+
+    expect(primary.prefetch).toHaveBeenCalledWith('Next sentence.', OPTS);
+  });
+
   it('cancel() reaches both engines', () => {
     const primary = makeEngine();
     const fallback = makeEngine();

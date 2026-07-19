@@ -24,6 +24,7 @@ export const STRINGS = {
     readFailAccount:
       "I couldn't read this spreadsheet. I'm using the Google account {email}. If this file belongs to a different account — for example a school or work account — ask its owner to share it with {email}, or open it in a Chrome profile signed in as the owner. Details: {details}.",
     thinking: 'Thinking...',
+    ack: 'One moment.',
     micBlocked:
       'Microphone access is blocked. To fix it, click the microphone icon at the right end of the address bar and choose Allow.',
     micWillPrompt:
@@ -127,6 +128,7 @@ export const STRINGS = {
     readFailAccount:
       'Saya tidak bisa membaca spreadsheet ini. Saya memakai akun Google {email}. Jika file ini milik akun lain — misalnya akun kampus atau kantor — minta pemiliknya membagikannya ke {email}, atau buka di profil Chrome pemiliknya. Detail: {details}.',
     thinking: 'Sedang berpikir...',
+    ack: 'Sebentar.',
     micBlocked:
       'Akses mikrofon diblokir. Untuk memperbaikinya, klik ikon mikrofon di ujung kanan bilah alamat dan pilih Izinkan.',
     micWillPrompt: 'Chrome akan meminta izin mikrofon. Silakan pilih Izinkan.',
