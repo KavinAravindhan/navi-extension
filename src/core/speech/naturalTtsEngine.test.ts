@@ -42,7 +42,7 @@ describe('OpenAITTSEngine', () => {
       createObjectURL: vi.fn(() => 'blob:fake-url'),
       revokeObjectURL: vi.fn(),
     });
-    engine = new OpenAITTSEngine('test-key', 'alloy');
+    engine = new OpenAITTSEngine('test-key', () => 'alloy');
     onEnd = vi.fn<() => void>();
     onError = vi.fn<(e: string) => void>();
   });

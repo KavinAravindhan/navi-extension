@@ -5,7 +5,6 @@ import type {
   ContextScope,
   FontSize,
   OutputMode,
-  VoiceEngine,
 } from '@/core/settings/settings';
 import { NaviMenu, type MenuDeps } from './menu';
 
@@ -18,7 +17,7 @@ describe('NaviMenu', () => {
     outputMode: OutputMode;
     contextScope: ContextScope;
     language: Language;
-    voiceEngine: VoiceEngine;
+    voiceChoice: string;
     wakeWordEnabled: boolean;
     typingVisible: boolean;
   };
@@ -44,7 +43,7 @@ describe('NaviMenu', () => {
       outputMode: 'voice',
       contextScope: 'tab',
       language: 'en',
-      voiceEngine: 'system',
+      voiceChoice: 'system',
       wakeWordEnabled: false,
       typingVisible: false,
     };
@@ -72,10 +71,11 @@ describe('NaviMenu', () => {
       setLanguage: vi.fn((language: Language) => {
         state.language = language;
       }),
-      getVoiceEngine: () => state.voiceEngine,
-      setVoiceEngine: vi.fn((engine: VoiceEngine) => {
-        state.voiceEngine = engine;
+      getVoiceChoice: () => state.voiceChoice,
+      setVoiceChoice: vi.fn((choice: string) => {
+        state.voiceChoice = choice;
       }),
+      previewVoice: vi.fn<(choice: string, text: string) => void>(),
       getTypingVisible: () => state.typingVisible,
       setTypingVisible: vi.fn((visible: boolean) => {
         state.typingVisible = visible;
@@ -116,7 +116,10 @@ describe('NaviMenu', () => {
       'Language: English',
       'Language: Bahasa Indonesia',
       'Voice: System (fast)',
-      'Voice: Natural (OpenAI)',
+      'Voice: Nova (natural)',
+      'Voice: Shimmer (natural)',
+      'Voice: Alloy (natural)',
+      'Voice: Onyx (natural)',
       'Show the typing box',
       'Wake word: "Hey NAVI"',
       'Greeting when NAVI opens',
@@ -158,13 +161,30 @@ describe('NaviMenu', () => {
     expect(menu.isOpen).toBe(false); // menu closes so the tour is audible
   });
 
-  it('switching the voice engine persists and announces', () => {
+  it('choosing a natural voice persists it and confirms in the new voice', () => {
     menu.show();
 
-    itemByLabel('Voice: Natural (OpenAI)').click();
-    expect(deps.setVoiceEngine).toHaveBeenCalledWith('natural');
-    expect(deps.announce).toHaveBeenCalledWith(
-      expect.stringContaining('Natural voice on'),
+    itemByLabel('Voice: Nova (natural)').click();
+    expect(deps.setVoiceChoice).toHaveBeenCalledWith('nova');
+    expect(deps.announce).toHaveBeenCalledWith('This is my voice from now on.');
+    expect(
+      itemByLabel('Voice: Nova (natural)').getAttribute('aria-checked'),
+    ).toBe('true');
+  });
+
+  it('focusing a voice item previews THAT voice instead of the normal announce', () => {
+    menu.show();
+
+    itemByLabel('Voice: Shimmer (natural)').focus();
+    expect(deps.previewVoice).toHaveBeenCalledWith(
+      'shimmer',
+      "Hi, I'm NAVI. This is my voice.",
+    );
+
+    itemByLabel('Voice: System (fast)').focus();
+    expect(deps.previewVoice).toHaveBeenCalledWith(
+      'system',
+      "Hi, I'm NAVI. This is my voice.",
     );
   });
 

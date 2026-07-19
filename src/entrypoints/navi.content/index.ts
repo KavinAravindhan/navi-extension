@@ -16,6 +16,7 @@ import {
   type OutputMode,
 } from '@/core/settings/settings';
 import { Announcer, createLiveRegion } from '@/core/speech/announcer';
+import { FallbackSentenceEngine } from '@/core/speech/fallbackEngine';
 import { OpenAITTSEngine } from '@/core/speech/naturalTtsEngine';
 import { SpeechPlayer } from '@/core/speech/speechPlayer';
 import { VoiceRecognition, type VoiceRecognitionOptions } from '@/core/speech/stt';
@@ -128,7 +129,23 @@ async function initializeNavi(): Promise<void> {
   // ---- Speech: player + wake coordination ------------------------------
 
   const systemVoice = new WebSpeechEngine(SPEECH_LANG[settings.language]);
-  const naturalVoice = new OpenAITTSEngine(naviConfig.openaiApiKey);
+  const naturalVoice = new OpenAITTSEngine(
+    naviConfig.openaiApiKey,
+    () => settings.naturalVoiceName,
+  );
+  // Natural first, system as the never-mute safety net (offline, quota...).
+  const naturalWithFallback = new FallbackSentenceEngine(
+    naturalVoice,
+    systemVoice,
+    (error) => console.warn('NAVI: natural voice failed, using system voice:', error),
+  );
+
+  // Voice preview: speaks a sample in whatever voice the menu focuses.
+  let previewVoiceName = settings.naturalVoiceName;
+  const previewEngine = new OpenAITTSEngine(
+    naviConfig.openaiApiKey,
+    () => previewVoiceName,
+  );
 
   // One-shot hook: chains "greeting finished → open the mic" and
   // "tour finished → introduce the sheet". A double-Shift skip lands in the
@@ -164,7 +181,7 @@ async function initializeNavi(): Promise<void> {
         syncWake();
       },
     },
-    () => (settings.voiceEngine === 'natural' ? naturalVoice : systemVoice),
+    () => (settings.voiceEngine === 'natural' ? naturalWithFallback : systemVoice),
   );
   player.setLanguage(SPEECH_LANG[settings.language]);
 
@@ -464,11 +481,38 @@ async function initializeNavi(): Promise<void> {
       wake.setLanguage(SPEECH_LANG[language]);
       rescan();
     },
-    getVoiceEngine: () => settings.voiceEngine,
-    setVoiceEngine: (engine) => {
-      settings.voiceEngine = engine;
+    getVoiceChoice: () =>
+      settings.voiceEngine === 'system' ? 'system' : settings.naturalVoiceName,
+    setVoiceChoice: (choice) => {
+      previewEngine.cancel();
+      if (choice === 'system') {
+        settings.voiceEngine = 'system';
+        void saveSettings({ voiceEngine: 'system' });
+      } else {
+        settings.voiceEngine = 'natural';
+        settings.naturalVoiceName = choice;
+        void saveSettings({ voiceEngine: 'natural', naturalVoiceName: choice });
+      }
+      player.stop(); // the confirmation speaks in the NEW voice
+    },
+    previewVoice: (choice, text) => {
       player.stop();
-      void saveSettings({ voiceEngine: engine });
+      previewEngine.cancel();
+      if (settings.outputMode !== 'voice') return; // SR mode: no audio previews
+      if (choice === 'system') {
+        systemVoice.speak(
+          text,
+          { rate: settings.speechRate, lang: SPEECH_LANG[settings.language] },
+          { onEnd: () => {}, onError: () => {} },
+        );
+      } else {
+        previewVoiceName = choice;
+        previewEngine.speak(
+          text,
+          { rate: settings.speechRate, lang: SPEECH_LANG[settings.language] },
+          { onEnd: () => {}, onError: () => {} },
+        );
+      }
     },
     getWakeWordEnabled: () => settings.wakeWordEnabled,
     setWakeWordEnabled: (enabled) => {
