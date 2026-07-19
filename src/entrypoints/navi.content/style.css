@@ -110,7 +110,14 @@
   padding: 12px 16px;
   background-color: #0a0a0a;
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  flex: 1;
+  overflow-y: auto;
 }
+
+#navi-menu::-webkit-scrollbar { width: 6px; }
+#navi-menu::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.25); border-radius: 3px; }
+
+.navi-menu-item { flex-shrink: 0; }
 
 .navi-menu-item {
   background-color: #111111;

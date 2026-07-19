@@ -2,6 +2,12 @@ import type { VoiceRecognitionOptions } from './stt';
 
 const WHISPER_URL = 'https://api.openai.com/v1/audio/transcriptions';
 
+/** Auto-stop when quiet this long (voice-first: no click needed to finish). */
+const SILENCE_MS = 1800;
+/** Hard recording cap — never leaves a hot mic running. */
+const MAX_RECORDING_MS = 20000;
+const SILENCE_RMS_THRESHOLD = 0.015;
+
 /**
  * Voice input via OpenAI Whisper: record with getUserMedia (WITH echo
  * cancellation — the Web Speech API can't do that, which is how NAVI used to
@@ -14,6 +20,9 @@ export class WhisperRecognition {
   private chunks: Blob[] = [];
   private listening = false;
   private lang = 'en-US';
+  private silenceTimer: ReturnType<typeof setInterval> | null = null;
+  private maxTimer: ReturnType<typeof setTimeout> | null = null;
+  private audioContext: AudioContext | null = null;
 
   constructor(
     private readonly apiKey: string,
@@ -64,6 +73,7 @@ export class WhisperRecognition {
       };
 
       recorder.onstop = () => {
+        this.clearWatchers();
         stream.getTracks().forEach((track) => track.stop());
         this.recorder = null;
         this.setListening(false);
@@ -76,6 +86,8 @@ export class WhisperRecognition {
       this.recorder = recorder;
       recorder.start();
       this.setListening(true);
+      this.watchForSilence(stream);
+      this.maxTimer = setTimeout(() => this.recorder?.stop(), MAX_RECORDING_MS);
     } catch (error) {
       this.setListening(false);
       if ((error as Error).name === 'NotAllowedError') {
@@ -119,5 +131,58 @@ export class WhisperRecognition {
   private setListening(value: boolean): void {
     this.listening = value;
     this.options.onStateChange?.(value);
+  }
+
+  /**
+   * Watches the input level and stops the recording after ~2s of silence,
+   * so speaking to NAVI needs no stop click. Skipped quietly where the
+   * AudioContext API is unavailable (click-to-stop still works there).
+   */
+  private watchForSilence(stream: MediaStream): void {
+    const AudioContextCtor =
+      (window as any).AudioContext ?? (window as any).webkitAudioContext;
+    if (!AudioContextCtor) return;
+
+    try {
+      const audioContext: AudioContext = new AudioContextCtor();
+      this.audioContext = audioContext;
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+
+      const samples = new Float32Array(analyser.fftSize);
+      let heardSpeech = false;
+      let quietSince = Date.now();
+
+      this.silenceTimer = setInterval(() => {
+        analyser.getFloatTimeDomainData(samples);
+        let sum = 0;
+        for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
+        const rms = Math.sqrt(sum / samples.length);
+
+        if (rms > SILENCE_RMS_THRESHOLD) {
+          heardSpeech = true;
+          quietSince = Date.now();
+        } else if (heardSpeech && Date.now() - quietSince >= SILENCE_MS) {
+          this.recorder?.stop();
+        }
+      }, 200);
+    } catch (error) {
+      console.warn('NAVI: Silence detection unavailable:', error);
+    }
+  }
+
+  private clearWatchers(): void {
+    if (this.silenceTimer !== null) {
+      clearInterval(this.silenceTimer);
+      this.silenceTimer = null;
+    }
+    if (this.maxTimer !== null) {
+      clearTimeout(this.maxTimer);
+      this.maxTimer = null;
+    }
+    void this.audioContext?.close().catch(() => {});
+    this.audioContext = null;
   }
 }

@@ -8,8 +8,13 @@
 export const STRINGS = {
   en: {
     greeting: "Hi, I'm NAVI.",
-    scanIntro:
-      "Hi! I'm NAVI, your accessibility assistant. Let me scan your spreadsheet now...",
+    whatToKnow: 'What would you like to know?',
+    stillScanning: "One moment — I'm still reading this spreadsheet.",
+    overviewOneTab: 'This workbook has one tab: {names}.',
+    overviewTabs: 'This workbook has {count} tabs: {names}.',
+    overviewCurrent: "You're on {tab}, with {rows} rows.",
+    overviewCurrentWithHeading: "You're on {tab} — a table called {heading} with {rows} rows.",
+    overviewCharts: 'It also has {count} chart{plural}.',
     readFail:
       "I couldn't read this spreadsheet. Please make sure Chrome is signed in to a Google account that can view it. Details: {details}.",
     thinking: 'Thinking...',
@@ -77,23 +82,36 @@ export const STRINGS = {
     wakeUnavailable: 'The wake word is not available in this browser.',
     wakeHeard: 'Yes? How can I help?',
     menuTour: 'Play the welcome tour',
+    menuTyping: 'Show the typing box',
+    typingShown: 'Typing box shown.',
+    typingHidden: 'Typing box hidden.',
+    shortcutNotSet:
+      'The keyboard shortcut is not set on this computer. A helper can set it at chrome extensions shortcuts. Meanwhile, just say Hey NAVI anytime.',
+
     tourIntro:
       "Welcome! I'm NAVI, your spreadsheet assistant. Here is a quick tour. Tap Shift twice at any time to skip it.",
+    tourWake:
+      'To call me, just say Hey NAVI, anytime. When I answer, speak your question — no buttons needed.',
     tourPause:
       'To pause or continue my voice, tap the Shift key once. You can try it right now while I keep talking.',
     tourSpeed:
       'To change my speed, hold Alt and press period to go faster, or Alt and comma to go slower.',
-    tourShortcuts:
-      'Press Alt and N to open me from anywhere in the sheet. Press Alt and M for my menu with all settings. Press Alt and Q twice to close me.',
+    tourShortcutBound:
+      'You can also open me with the keyboard: press {shortcut}. For my settings menu, press Alt and M. To close me, press Alt and Q twice.',
     tourTalk:
-      'To talk to me, click the microphone button or type in the message box. I can read your data, answer questions, and edit cells for you.',
+      'I can read your data, answer questions, and edit cells — just ask.',
     tourEnd:
-      'You can replay this tour anytime from my menu. Now let me scan your spreadsheet.',
+      'You can replay this tour anytime from my menu. Now, your spreadsheet.',
   },
   id: {
     greeting: 'Halo, saya NAVI.',
-    scanIntro:
-      'Halo! Saya NAVI, asisten aksesibilitas Anda. Saya akan memindai spreadsheet Anda sekarang...',
+    whatToKnow: 'Apa yang ingin Anda ketahui?',
+    stillScanning: 'Sebentar — saya masih membaca spreadsheet ini.',
+    overviewOneTab: 'Workbook ini punya satu tab: {names}.',
+    overviewTabs: 'Workbook ini punya {count} tab: {names}.',
+    overviewCurrent: 'Anda berada di {tab}, dengan {rows} baris.',
+    overviewCurrentWithHeading: 'Anda berada di {tab} — tabel bernama {heading} dengan {rows} baris.',
+    overviewCharts: 'Ada juga {count} grafik{plural}.',
     readFail:
       'Saya tidak bisa membaca spreadsheet ini. Pastikan Chrome masuk dengan akun Google yang punya akses. Detail: {details}.',
     thinking: 'Sedang berpikir...',
@@ -161,18 +179,26 @@ export const STRINGS = {
     wakeUnavailable: 'Kata pemicu tidak tersedia di peramban ini.',
     wakeHeard: 'Ya? Ada yang bisa saya bantu?',
     menuTour: 'Putar tur sambutan',
+    menuTyping: 'Tampilkan kotak ketik',
+    typingShown: 'Kotak ketik ditampilkan.',
+    typingHidden: 'Kotak ketik disembunyikan.',
+    shortcutNotSet:
+      'Pintasan keyboard belum diatur di komputer ini. Pendamping bisa mengaturnya di chrome extensions shortcuts. Sementara itu, ucapkan saja Hey NAVI kapan pun.',
+
     tourIntro:
       'Selamat datang! Saya NAVI, asisten spreadsheet Anda. Ini tur singkat. Ketuk Shift dua kali kapan saja untuk melewatinya.',
+    tourWake:
+      'Untuk memanggil saya, ucapkan saja Hey NAVI, kapan pun. Saat saya menjawab, langsung ucapkan pertanyaan Anda — tanpa tombol apa pun.',
     tourPause:
       'Untuk menjeda atau melanjutkan suara saya, ketuk tombol Shift sekali. Anda bisa mencobanya sekarang selagi saya bicara.',
     tourSpeed:
       'Untuk mengubah kecepatan, tahan Alt dan tekan titik untuk mempercepat, atau Alt dan koma untuk memperlambat.',
-    tourShortcuts:
-      'Tekan Alt dan N untuk membuka saya dari mana saja di sheet. Tekan Alt dan M untuk menu dengan semua pengaturan. Tekan Alt dan Q dua kali untuk menutup saya.',
+    tourShortcutBound:
+      'Anda juga bisa membuka saya dengan keyboard: tekan {shortcut}. Untuk menu pengaturan, tekan Alt dan M. Untuk menutup saya, tekan Alt dan Q dua kali.',
     tourTalk:
-      'Untuk berbicara dengan saya, klik tombol mikrofon atau ketik di kotak pesan. Saya bisa membaca data Anda, menjawab pertanyaan, dan mengedit sel.',
+      'Saya bisa membaca data Anda, menjawab pertanyaan, dan mengedit sel — tinggal minta.',
     tourEnd:
-      'Anda bisa memutar tur ini lagi kapan saja dari menu saya. Sekarang saya akan memindai spreadsheet Anda.',
+      'Anda bisa memutar tur ini lagi kapan saja dari menu saya. Sekarang, spreadsheet Anda.',
   },
 } as const;
 

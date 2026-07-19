@@ -7,9 +7,9 @@ import {
   makeT,
 } from '@/core/i18n/i18n';
 import { attachSpeechShortcuts } from '@/core/keyboard/speechShortcuts';
-import { buildTourScript } from '@/core/onboarding/tour';
 import { LLMClient } from '@/core/llm/client';
 import { ToolRegistry } from '@/core/llm/tools';
+import { buildTourScript } from '@/core/onboarding/tour';
 import {
   loadSettings,
   saveSettings,
@@ -27,6 +27,7 @@ import {
   quoteSheetTitle,
   type TabSection,
 } from '@/core/workbook/model';
+import { buildSpokenOverview, spokenShortcut } from '@/core/workbook/overview';
 import { getActiveCellA1 } from '@/platform/sheets/activeCell';
 import { requestCellEdit } from '@/platform/sheets/editCell';
 import { getActiveSheetName } from '@/platform/sheets/location';
@@ -45,10 +46,15 @@ export default defineContentScript({
 });
 
 /**
- * Composition root. Since Step 5a the assistant works through function
- * calling (edit_cell / read_range tools) instead of text parsing, and every
- * user-facing string, the speech voice, the voice input, and the AI response
- * language follow the language setting (English / Bahasa Indonesia).
+ * Composition root — voice-first design:
+ * - Page load: NAVI silently pre-reads the workbook. No panel, no voice.
+ * - First summon ("Hey NAVI" / Alt+N / the eye): a short LOCAL overview
+ *   speaks instantly, then the mic opens by itself.
+ * - Later summons: just "Yes?" + listening.
+ * - The wake word runs at all times, auto-paused while NAVI speaks or
+ *   records (so she can't trigger herself).
+ * Depth is always pulled by asking — the greeting stays constant-time no
+ * matter how many capabilities are added.
  */
 async function initializeNavi(): Promise<void> {
   console.log('NAVI: Initializing...');
@@ -119,18 +125,29 @@ async function initializeNavi(): Promise<void> {
   const llm = new LLMClient(naviConfig.openaiApiKey, tools);
   llm.setLanguage(LLM_LANGUAGE_NAME[settings.language]);
 
-  // ---- Speech ----------------------------------------------------------
+  // ---- Speech: player + wake coordination ------------------------------
 
-  // Two TTS engines behind one player: the setting picks per sentence, so
-  // switching voices takes effect immediately (NAVI-017).
   const systemVoice = new WebSpeechEngine(SPEECH_LANG[settings.language]);
   const naturalVoice = new OpenAITTSEngine(naviConfig.openaiApiKey);
 
-  // One-shot hook: lets the tour hand over to the first scan when it ends
-  // (a double-Shift skip also lands here — skipping goes straight to the scan).
+  // One-shot hook: chains "greeting finished → open the mic" and
+  // "tour finished → introduce the sheet". A double-Shift skip lands in the
+  // same place, so skipping never breaks the flow.
   let afterIdle: (() => void) | null = null;
   const afterSpeechEnds = (fn: () => void): void => {
     afterIdle = fn;
+  };
+
+  let playerBusy = false;
+  let micBusy = false;
+  const syncWake = (): void => {
+    const shouldRun =
+      settings.wakeWordEnabled && wakeAvailable && !playerBusy && !micBusy;
+    if (shouldRun) {
+      wake.start();
+    } else {
+      wake.stop();
+    }
   };
 
   const player = new SpeechPlayer(
@@ -138,11 +155,13 @@ async function initializeNavi(): Promise<void> {
     {
       onStatusChange: (status) => {
         panel.setPlaybackStatus(status);
+        playerBusy = status === 'speaking';
         if (status === 'idle' && afterIdle) {
           const fn = afterIdle;
           afterIdle = null;
           fn();
         }
+        syncWake();
       },
     },
     () => (settings.voiceEngine === 'natural' ? naturalVoice : systemVoice),
@@ -152,17 +171,34 @@ async function initializeNavi(): Promise<void> {
   const liveRegion = createLiveRegion(document);
   const announcer = new Announcer(player, () => settings.outputMode, liveRegion);
 
+  /** Queued while the menu is open — nothing may talk over the menu. */
+  let pendingSpeech: string | null = null;
+
   /** Chat responses: voice mode speaks; SR mode lets the live log announce. */
   const speakResponse = (text: string): void => {
-    if (settings.outputMode === 'voice') player.speak(text);
+    if (settings.outputMode !== 'voice') return;
+    if (menu.isOpen) {
+      pendingSpeech = text;
+      return;
+    }
+    player.speak(text);
   };
 
-  // Two voice-input engines sharing one set of callbacks (NAVI-009/011).
+  // ---- Voice input ------------------------------------------------------
+
   const sttOptions: VoiceRecognitionOptions = {
     onResult: (transcript) => panel.submitTranscript(transcript),
-    onStateChange: (listening) => panel.setVoiceButtonState(listening),
-    // Half-duplex (NAVI-009): the moment we listen, nothing may be speaking.
-    onBeforeStart: () => player.stop(),
+    onStateChange: (listening) => {
+      micBusy = listening;
+      panel.setVoiceButtonState(listening);
+      syncWake();
+    },
+    // Half-duplex (NAVI-009): the moment we listen, nothing may be speaking
+    // and the wake loop must release the recognition engine.
+    onBeforeStart: () => {
+      player.stop();
+      wake.stop();
+    },
     onPermissionDenied: () => {
       const msg = t('micBlocked');
       panel.addMessage(msg, 'ai');
@@ -179,97 +215,199 @@ async function initializeNavi(): Promise<void> {
   whisperStt.setLanguage(SPEECH_LANG[settings.language]);
   const whisperAvailable = whisperStt.init();
 
-  const activeStt = () =>
-    settings.sttEngine === 'whisper' && whisperAvailable ? whisperStt : browserStt;
+  // NAVI auto-picks the best microphone — one less menu decision.
+  const activeStt = () => (whisperAvailable ? whisperStt : browserStt);
 
   const stopListening = (): void => {
     if (browserStt.isListening) browserStt.toggle();
     if (whisperStt.isListening) whisperStt.toggle();
   };
 
-  const toggleVoiceInput = (): void => {
+  const startListening = (): void => {
+    if (activeStt().isListening) return;
     void (async () => {
-      // First-time users: warn that Chrome is about to ask for the mic
-      // BEFORE the (visual) permission popup appears (NAVI-011).
-      if (!activeStt().isListening) {
-        try {
-          const status = await navigator.permissions.query({
-            name: 'microphone' as PermissionName,
-          });
-          if (status.state === 'prompt') announcer.say(t('micWillPrompt'));
-        } catch {
-          // permissions API unavailable — proceed silently
-        }
+      try {
+        const status = await navigator.permissions.query({
+          name: 'microphone' as PermissionName,
+        });
+        if (status.state === 'prompt') announcer.say(t('micWillPrompt'));
+      } catch {
+        // permissions API unavailable — proceed silently
       }
       activeStt().toggle();
     })();
   };
 
-  // ---- Panel + menu ----------------------------------------------------
+  // ---- Wake word (always on, voice-first) -------------------------------
 
-  let greeted = false;
-  let summaryStarted = false;
-  let closingForQuit = false;
-  const quitConfirm = new TwoStepConfirm();
-
-  // Opt-in "Hey NAVI" (NAVI-015): listens only while the panel is CLOSED.
   const wake = new WakeWordListener(() => {
-    panel.open();
-    announcer.say(t('wakeHeard'));
+    if (panel.isOpen) {
+      speakThenListen(t('wakeHeard'));
+    } else {
+      panel.open(); // onOpen decides: intro or "Yes?"
+    }
   });
   wake.setLanguage(SPEECH_LANG[settings.language]);
   const wakeAvailable = wake.isSupported();
 
-  /** Speaks the walkthrough; on first run the scan starts when it ends. */
-  const runTour = (opts: { firstTime: boolean }): void => {
-    const script = buildTourScript(t);
-    panel.addMessage(script, 'ai');
-    const startScan = () => {
-      if (!summaryStarted) {
-        summaryStarted = true;
-        void loadSpreadsheetAndSummarize();
+  // ---- Silent pre-scan ---------------------------------------------------
+
+  let scanState: 'idle' | 'scanning' | 'ready' | 'failed' = 'idle';
+  let scanError = '';
+  let overview: string | null = null;
+  let announceOverviewWhenReady = false;
+  let introduced = false;
+
+  async function preScan(): Promise<void> {
+    if (scanState === 'scanning') return;
+    scanState = 'scanning';
+    overview = null;
+
+    const workbook = await requestWorkbook();
+    if (!workbook.success || !workbook.tabs || workbook.tabs.length === 0) {
+      scanError = workbook.error ?? 'no sheets found';
+      scanState = 'failed';
+      if (announceOverviewWhenReady) {
+        announceOverviewWhenReady = false;
+        scanState = 'idle'; // next summon retries
+        speakThenListen(t('readFail', { details: scanError }), { listen: false });
       }
+      return;
+    }
+
+    const tabs = workbook.tabs;
+    const domTabName = getActiveSheetName();
+    const activeTabTitle =
+      tabs.find((tab) => tab.title === domTabName)?.title ?? tabs[0].title;
+
+    const includedTabs =
+      settings.contextScope === 'file'
+        ? tabs
+        : tabs.filter((tab) => tab.title === activeTabTitle);
+
+    const sections: TabSection[] = [];
+    for (const tab of includedTabs) {
+      const range = await requestRange(quoteSheetTitle(tab.title));
+      sections.push({
+        title: tab.title,
+        values: range.success ? (range.values ?? []) : [],
+      });
+    }
+
+    llm.setSpreadsheetContext(
+      buildWorkbookContext({
+        workbookTitle: workbook.title ?? 'Untitled workbook',
+        tabs,
+        activeTabTitle,
+        scope: settings.contextScope,
+        sections,
+      }),
+    );
+
+    overview = buildSpokenOverview(t, {
+      tabs,
+      activeTabTitle,
+      activeTabValues:
+        sections.find((section) => section.title === activeTabTitle)?.values ?? [],
+    });
+    scanState = 'ready';
+
+    if (announceOverviewWhenReady) {
+      announceOverviewWhenReady = false;
+      speakThenListen(`${overview} ${t('whatToKnow')}`);
+    }
+  }
+
+  // ---- Summon flow -------------------------------------------------------
+
+  /** Speaks (or queues) a message; optionally opens the mic when it ends. */
+  function speakThenListen(text: string, opts: { listen?: boolean } = {}): void {
+    const listen = opts.listen ?? true;
+    panel.addMessage(text, 'ai');
+    if (settings.outputMode === 'voice') {
+      if (menu.isOpen) {
+        pendingSpeech = text;
+        return;
+      }
+      if (listen) afterSpeechEnds(() => startListening());
+      player.speak(text);
+    } else if (listen) {
+      // SR mode: the live log reads the text; open the mic right away.
+      startListening();
+    }
+  }
+
+  /** First summon: greeting + instant local overview; later: just "Yes?". */
+  function introduce(): void {
+    const hello = settings.greetingEnabled ? `${t('greeting')} ` : '';
+
+    if (scanState === 'ready' && overview) {
+      introduced = true;
+      speakThenListen(`${hello}${overview} ${t('whatToKnow')}`);
+      return;
+    }
+
+    if (scanState === 'failed' || scanState === 'idle') {
+      scanState = 'idle';
+      void preScan();
+    }
+    // Scan in flight — greet now; the overview speaks the moment it lands.
+    announceOverviewWhenReady = true;
+    speakThenListen(`${hello}${t('stillScanning')}`, { listen: false });
+  }
+
+  const runTour = (opts: { firstTime: boolean }): void => {
+    const script = buildTourScript(t, { shortcutSpoken: shortcutPhrase });
+    panel.addMessage(script, 'ai');
+    const proceed = () => {
+      if (opts.firstTime) introduce();
     };
     if (settings.outputMode === 'voice') {
-      if (opts.firstTime) afterSpeechEnds(startScan);
+      if (opts.firstTime) afterSpeechEnds(proceed);
       player.speak(script);
     } else {
-      // Screen-reader mode: the live log reads the tour; scan right away.
-      if (opts.firstTime) startScan();
+      proceed();
     }
   };
+
+  // ---- Panel + menu ------------------------------------------------------
+
+  let closingForQuit = false;
+  const quitConfirm = new TwoStepConfirm();
 
   const panel = new NaviPanel(
     chrome.runtime.getURL('icons/navi_eye_black_bg.png'),
     {
       onOpen: () => {
-        wake.stop(); // panel open — the normal mic takes over
         if (!settings.onboardingDone) {
           settings.onboardingDone = true;
-          greeted = true; // the tour IS the greeting
           void saveSettings({ onboardingDone: true });
           runTour({ firstTime: true });
           return;
         }
-        if (!greeted && settings.greetingEnabled) {
-          greeted = true;
-          announcer.say(t('greeting'));
-        }
-        if (!summaryStarted) {
-          summaryStarted = true;
-          void loadSpreadsheetAndSummarize();
+        if (!introduced) {
+          introduce();
+        } else {
+          speakThenListen(t('wakeHeard'));
         }
       },
       onUserMessage: (text) => void handleUserMessage(text),
-      onVoiceToggle: () => toggleVoiceInput(),
+      onVoiceToggle: () => {
+        if (activeStt().isListening) {
+          stopListening();
+        } else {
+          startListening();
+        }
+      },
       onPauseToggle: () => player.togglePause(),
       onStop: () => player.stop(),
       onClose: () => {
         menu.hide();
         quitConfirm.reset();
+        stopListening();
         if (!closingForQuit) player.stop();
         closingForQuit = false;
-        if (settings.wakeWordEnabled && wakeAvailable) wake.start();
+        syncWake();
       },
     },
     { t },
@@ -277,12 +415,19 @@ async function initializeNavi(): Promise<void> {
 
   panel.applyFontSize(settings.fontSize);
   panel.setOutputMode(settings.outputMode);
+  panel.setInputVisible(settings.typingVisible);
 
   const setOutputMode = (mode: OutputMode): void => {
     settings.outputMode = mode;
     panel.setOutputMode(mode);
     if (mode === 'screenreader') player.stop();
     void saveSettings({ outputMode: mode });
+  };
+
+  const rescan = (): void => {
+    scanState = 'idle';
+    introduced = false;
+    void preScan();
   };
 
   const menu = new NaviMenu(panel.getMenuContainer(), {
@@ -306,7 +451,7 @@ async function initializeNavi(): Promise<void> {
     setContextScope: (scope) => {
       settings.contextScope = scope;
       void saveSettings({ contextScope: scope });
-      void loadSpreadsheetAndSummarize(); // rescan with the new scope
+      rescan();
     },
     getLanguage: () => settings.language,
     setLanguage: (language) => {
@@ -317,12 +462,12 @@ async function initializeNavi(): Promise<void> {
       browserStt.setLanguage(SPEECH_LANG[language]);
       whisperStt.setLanguage(SPEECH_LANG[language]);
       wake.setLanguage(SPEECH_LANG[language]);
-      void loadSpreadsheetAndSummarize(); // re-summarize in the new language
+      rescan();
     },
     getVoiceEngine: () => settings.voiceEngine,
     setVoiceEngine: (engine) => {
       settings.voiceEngine = engine;
-      player.stop(); // next speech starts cleanly on the new engine
+      player.stop();
       void saveSettings({ voiceEngine: engine });
     },
     getWakeWordEnabled: () => settings.wakeWordEnabled,
@@ -333,19 +478,24 @@ async function initializeNavi(): Promise<void> {
       }
       settings.wakeWordEnabled = enabled;
       void saveSettings({ wakeWordEnabled: enabled });
-      if (!enabled) wake.stop();
-      // When enabled, listening begins the next time the panel closes.
+      syncWake();
+    },
+    getTypingVisible: () => settings.typingVisible,
+    setTypingVisible: (visible) => {
+      settings.typingVisible = visible;
+      void saveSettings({ typingVisible: visible });
     },
     onPlayTour: () => runTour({ firstTime: false }),
-    getSttEngine: () => settings.sttEngine,
-    setSttEngine: (engine) => {
-      if (engine === 'whisper' && !whisperAvailable) {
-        announcer.say(t('micWhisperUnavailable'));
-        return;
+    onVisibilityChange: (open) => {
+      panel.setMenuMode(open);
+      if (!open) {
+        panel.setInputVisible(settings.typingVisible);
+        if (pendingSpeech) {
+          const text = pendingSpeech;
+          pendingSpeech = null;
+          player.speak(text);
+        }
       }
-      stopListening();
-      settings.sttEngine = engine;
-      void saveSettings({ sttEngine: engine });
     },
     onClose: () => {
       if (panel.isOpen) panel.focusInput();
@@ -354,15 +504,12 @@ async function initializeNavi(): Promise<void> {
 
   browserStt.init();
 
-  // Wake word active from the start when enabled (panel begins closed).
-  if (settings.wakeWordEnabled && wakeAvailable) wake.start();
+  // ---- Global shortcuts + browser command --------------------------------
 
   attachSpeechShortcuts(document, player, {
     onRateChange: (rate) => {
       settings.speechRate = rate;
       void saveSettings({ speechRate: rate });
-      // Mid-speech the sentence restarts at the new speed (feedback enough);
-      // when idle, say it out loud so the change is never silent.
       if (player.playbackStatus === 'idle')
         announcer.say(t('speedAnnounce', { rate }));
     },
@@ -384,16 +531,12 @@ async function initializeNavi(): Promise<void> {
         announcer.say(msg);
       }
     },
-    // Ctrl+Alt+Z (NAVI-004): screen reader mode + announce the active cell.
     onScreenReaderMode: () => {
       if (!panel.isOpen) panel.open();
       setOutputMode('screenreader');
       const cell = getActiveCellA1();
-      announcer.say(
-        cell ? t('srModeOnWithCell', { cell }) : t('srModeOn'),
-      );
+      announcer.say(cell ? t('srModeOnWithCell', { cell }) : t('srModeOn'));
     },
-    // Alt/Option+C (tracker "[NAVI+c]"): announce what's on the clipboard.
     onClipboard: () => {
       void (async () => {
         try {
@@ -411,62 +554,22 @@ async function initializeNavi(): Promise<void> {
     },
   });
 
-  // Browser-level open shortcut, forwarded by the background worker —
-  // reaches us even when Google Sheets has trapped in-page keyboard focus.
+  // Browser-level open shortcut, forwarded by the background worker.
   chrome.runtime.onMessage.addListener((message: { action?: string }) => {
     if (message?.action === 'openNavi') panel.open();
   });
 
-  async function loadSpreadsheetAndSummarize(): Promise<void> {
-    panel.addMessage(t('scanIntro'), 'ai');
+  // What is Alt+N really bound to on this machine? Spoken in the tour.
+  let shortcutPhrase: string | null = null;
+  chrome.runtime.sendMessage(
+    { action: 'getShortcut' },
+    (response: { shortcut?: string | null } | undefined) => {
+      void chrome.runtime.lastError;
+      shortcutPhrase = spokenShortcut(response?.shortcut);
+    },
+  );
 
-    // All reads go through the user's Google sign-in — private sheets work.
-    const workbook = await requestWorkbook();
-    if (!workbook.success || !workbook.tabs || workbook.tabs.length === 0) {
-      const msg = t('readFail', {
-        details: workbook.error ?? 'no sheets found',
-      });
-      panel.addMessage(msg, 'ai');
-      speakResponse(msg);
-      summaryStarted = false; // allow retrying by reopening
-      return;
-    }
-
-    const tabs = workbook.tabs;
-    const domTabName = getActiveSheetName();
-    const activeTabTitle =
-      tabs.find((tab) => tab.title === domTabName)?.title ?? tabs[0].title;
-
-    const includedTabs =
-      settings.contextScope === 'file'
-        ? tabs
-        : tabs.filter((tab) => tab.title === activeTabTitle);
-
-    const sections: TabSection[] = [];
-    for (const tab of includedTabs) {
-      const range = await requestRange(quoteSheetTitle(tab.title));
-      sections.push({
-        title: tab.title,
-        values: range.success ? (range.values ?? []) : [],
-      });
-    }
-
-    const context = buildWorkbookContext({
-      workbookTitle: workbook.title ?? 'Untitled workbook',
-      tabs,
-      activeTabTitle,
-      scope: settings.contextScope,
-      sections,
-    });
-    llm.setSpreadsheetContext(context);
-
-    const summary = await llm.sendMessage(
-      'Please summarize this spreadsheet for a blind user. Start with how many tabs the workbook has and what each one is for, then describe the current tab in more detail, including its table heading if one exists. If the data or any charts show a trend, describe the direction and size of the trend in plain language. Be concise.',
-    );
-
-    panel.addMessage(summary, 'ai');
-    speakResponse(summary);
-  }
+  // ---- Conversation ------------------------------------------------------
 
   async function handleUserMessage(text: string): Promise<void> {
     player.stop();
@@ -474,14 +577,17 @@ async function initializeNavi(): Promise<void> {
     panel.addMessage(text, 'user');
     panel.addMessage(t('thinking'), 'ai', 'navi-thinking');
 
-    // Tool calls (cell edits, extra reads) happen inside the client loop;
-    // the model confirms what it did in its final answer.
     const aiResponse = await llm.sendMessage(text);
 
     panel.removeThinking();
     panel.addMessage(aiResponse, 'ai');
     speakResponse(aiResponse);
   }
+
+  // ---- Kick off: silent readiness ----------------------------------------
+
+  void preScan(); // background read — no panel, no voice
+  syncWake(); // wake word live from second zero (default ON)
 
   console.log('NAVI: Ready.');
 }

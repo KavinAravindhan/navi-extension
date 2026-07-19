@@ -3,28 +3,37 @@ import { makeT } from '@/core/i18n/i18n';
 import { buildTourScript } from './tour';
 
 describe('buildTourScript', () => {
-  it('covers the NAVI-012 walkthrough contents in English', () => {
-    const script = buildTourScript(makeT(() => 'en'));
+  it('teaches wake word first, then controls, with the REAL shortcut', () => {
+    const script = buildTourScript(makeT(() => 'en'), {
+      shortcutSpoken: 'Option and N',
+    });
 
-    // greeting, skip hint, pause control, speed, core shortcuts, mic, replay
     expect(script).toContain("I'm NAVI");
     expect(script).toContain('Shift twice at any time to skip');
+    expect(script).toContain('just say Hey NAVI');
     expect(script).toContain('tap the Shift key once');
     expect(script).toContain('Alt and press period');
-    expect(script).toContain('Alt and N');
+    expect(script).toContain('press Option and N');
     expect(script).toContain('Alt and M');
     expect(script).toContain('Alt and Q');
-    expect(script).toContain('microphone button');
     expect(script).toContain('replay this tour');
   });
 
+  it('speaks setup guidance when Chrome failed to bind the shortcut', () => {
+    const script = buildTourScript(makeT(() => 'en'), { shortcutSpoken: null });
+
+    expect(script).toContain('keyboard shortcut is not set');
+    expect(script).toContain('say Hey NAVI anytime');
+    expect(script).not.toContain('{shortcut}');
+  });
+
   it('is fully translated for Indonesian', () => {
-    const script = buildTourScript(makeT(() => 'id'));
+    const script = buildTourScript(makeT(() => 'id'), {
+      shortcutSpoken: 'Option dan N',
+    });
 
     expect(script).toContain('Saya NAVI');
-    expect(script).toContain('Shift dua kali');
-    expect(script).toContain('mikrofon');
-    // No English sentences leaked through.
+    expect(script).toContain('Hey NAVI');
     expect(script).not.toContain("I'm NAVI");
   });
 

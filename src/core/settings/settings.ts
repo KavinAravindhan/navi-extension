@@ -43,8 +43,10 @@ export interface NaviSettings {
   sttEngine: SttEngine;
   /** First-run audio walkthrough already played (NAVI-012). */
   onboardingDone: boolean;
-  /** Opt-in "Hey NAVI" wake word while the panel is closed (NAVI-015). */
+  /** "Hey NAVI" wake word — on by default (voice-first design). */
   wakeWordEnabled: boolean;
+  /** Typing box hidden by default; menu switch shows it (braille users). */
+  typingVisible: boolean;
 }
 
 /** 'system' = built-in speechSynthesis; 'natural' = OpenAI neural TTS. */
@@ -63,7 +65,8 @@ export const DEFAULT_SETTINGS: NaviSettings = {
   voiceEngine: 'system',
   sttEngine: 'browser',
   onboardingDone: false,
-  wakeWordEnabled: false,
+  wakeWordEnabled: true,
+  typingVisible: false,
 };
 
 export function loadSettings(): Promise<NaviSettings> {

@@ -49,9 +49,10 @@ describe('loadSettings', () => {
     expect(DEFAULT_SETTINGS.sttEngine).toBe('browser');
   });
 
-  it('first-run tour pending and wake word off by default', () => {
+  it('voice-first defaults: tour pending, wake word ON, typing hidden', () => {
     expect(DEFAULT_SETTINGS.onboardingDone).toBe(false);
-    expect(DEFAULT_SETTINGS.wakeWordEnabled).toBe(false);
+    expect(DEFAULT_SETTINGS.wakeWordEnabled).toBe(true);
+    expect(DEFAULT_SETTINGS.typingVisible).toBe(false);
   });
 
   it('falls back to defaults when storage reports an error', async () => {
