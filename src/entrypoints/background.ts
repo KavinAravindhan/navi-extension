@@ -1,3 +1,4 @@
+import { handleAppendDoc, handleGetDocument } from '@/platform/docs/docsApi';
 import {
   handleCreateChart,
   handleEditCell,
@@ -5,6 +6,7 @@ import {
   handleReadFormatting,
   handleReadRange,
 } from '@/platform/sheets/sheetsApi';
+import { handleAddSlide, handleGetPresentation } from '@/platform/slides/slidesApi';
 import { OPEN_NAVI_ACTION } from '@/platform/sheets/messages';
 
 // Handles OAuth token retrieval and all Google Sheets API calls (reads and
@@ -30,6 +32,14 @@ export default defineBackground(() => {
         return respond(handleCreateChart(message as never));
       case 'readFormatting':
         return respond(handleReadFormatting(message as never));
+      case 'getDocument':
+        return respond(handleGetDocument(message as never));
+      case 'appendDoc':
+        return respond(handleAppendDoc(message as never));
+      case 'getPresentation':
+        return respond(handleGetPresentation(message as never));
+      case 'addSlide':
+        return respond(handleAddSlide(message as never));
       case 'getProfile':
         // Which Google account is Chrome (and therefore NAVI) using? Spoken
         // in read-failure guidance so users know how to fix sharing.

@@ -32,6 +32,7 @@ import {
   type WorkbookTab,
 } from '@/core/workbook/model';
 import { buildSpokenOverview, spokenShortcut } from '@/core/workbook/overview';
+import { formatFindings, loadFindings, saveFinding } from '@/core/memory/recentFindings';
 import { getActiveCellA1 } from '@/platform/sheets/activeCell';
 import { requestCellEdit } from '@/platform/sheets/editCell';
 import { getActiveSheetName } from '@/platform/sheets/location';
@@ -42,11 +43,20 @@ import {
   requestRange,
   requestWorkbook,
 } from '@/platform/sheets/workbookGateway';
+import {
+  SURFACE_LABEL,
+  detectSurface,
+  getDocumentIdFromUrl,
+} from '@/platform/surface';
 import { NaviMenu } from '@/ui/menu';
 import { NaviPanel } from '@/ui/panel';
 
 export default defineContentScript({
-  matches: ['https://docs.google.com/spreadsheets/*'],
+  matches: [
+    'https://docs.google.com/spreadsheets/*',
+    'https://docs.google.com/document/*',
+    'https://docs.google.com/presentation/*',
+  ],
   runAt: 'document_end',
   cssInjectionMode: 'manifest',
   main() {
@@ -72,6 +82,9 @@ async function initializeNavi(): Promise<void> {
 
   const settings = await loadSettings();
   const t = makeT(() => settings.language);
+
+  const surface = detectSurface(window.location.href) ?? 'sheets';
+  let surfaceTitle = 'Untitled'; // set by the pre-scan, used by shared memory
 
   // ---- AI + tools -----------------------------------------------------
 
@@ -135,6 +148,18 @@ async function initializeNavi(): Promise<void> {
   // Tabs cached by the pre-scan; navigation/chart tools resolve names here.
   let knownTabs: WorkbookTab[] = [];
 
+  // Shared across every surface: recall what NAVI said in other tabs.
+  tools.register(
+    {
+      name: 'recall_recent',
+      description:
+        "Recall NAVI's recent findings from other Google tabs in this browser session (cross-app memory). Use when the user says 'that number', 'the figure from the sheet', etc.",
+      parameters: { type: 'object', properties: {} },
+    },
+    async () => formatFindings(await loadFindings()),
+  );
+
+  const registerSheetsTools = () => {
   const findTab = (name?: string): WorkbookTab | undefined => {
     if (knownTabs.length === 0) return undefined;
     if (!name) {
@@ -283,9 +308,140 @@ async function initializeNavi(): Promise<void> {
         : `No embedded IMAGE or SPARKLINE formulas found on "${tab.title}". ${apiNote}`;
     },
   );
+  };
+
+  const registerDocsTools = () => {
+    tools.register(
+      {
+        name: 'read_document',
+        description: 'Re-read the current Google Doc (title, headings, full text).',
+        parameters: { type: 'object', properties: {} },
+      },
+      async () => {
+        const documentId = getDocumentIdFromUrl(window.location.href);
+        if (!documentId) return 'Could not find the document ID.';
+        const res = await new Promise<any>((resolve) =>
+          chrome.runtime.sendMessage({ action: 'getDocument', documentId }, (r) => {
+            void chrome.runtime.lastError;
+            resolve(r);
+          }),
+        );
+        if (!res?.success) return `Read failed: ${res?.error ?? 'no response'}`;
+        const o = res.outline;
+        return `Title: ${o.title}
+Headings: ${o.headings.join(' | ') || '(none)'}
+
+${o.text}`;
+      },
+    );
+
+    tools.register(
+      {
+        name: 'append_paragraph',
+        description:
+          'Append a paragraph to the END of the current Google Doc. Use for dictation and for inserting facts recalled from other tabs.',
+        parameters: {
+          type: 'object',
+          properties: { text: { type: 'string' } },
+          required: ['text'],
+        },
+      },
+      async (args) => {
+        const documentId = getDocumentIdFromUrl(window.location.href);
+        if (!documentId) return 'Could not find the document ID.';
+        const res = await new Promise<any>((resolve) =>
+          chrome.runtime.sendMessage(
+            { action: 'appendDoc', documentId, text: String(args.text ?? '') },
+            (r) => {
+              void chrome.runtime.lastError;
+              resolve(r);
+            },
+          ),
+        );
+        return res?.success
+          ? 'Paragraph added at the end of the document.'
+          : `Write failed: ${res?.error ?? 'no response'}. The user may lack edit access.`;
+      },
+    );
+  };
+
+  const registerSlidesTools = () => {
+    const fetchDeck = async () => {
+      const presentationId = getDocumentIdFromUrl(window.location.href);
+      if (!presentationId) return null;
+      return new Promise<any>((resolve) =>
+        chrome.runtime.sendMessage({ action: 'getPresentation', presentationId }, (r) => {
+          void chrome.runtime.lastError;
+          resolve(r);
+        }),
+      );
+    };
+
+    tools.register(
+      {
+        name: 'read_slide',
+        description: 'Read one slide of the current presentation by its number.',
+        parameters: {
+          type: 'object',
+          properties: { slideNumber: { type: 'number' } },
+          required: ['slideNumber'],
+        },
+      },
+      async (args) => {
+        const res = await fetchDeck();
+        if (!res?.success) return `Read failed: ${res?.error ?? 'no response'}`;
+        const n = Number(args.slideNumber ?? 0);
+        const slide = res.outline.slides[n - 1];
+        if (!slide) return `There is no slide ${n}; the deck has ${res.outline.slides.length} slides.`;
+        return `Slide ${n}: "${slide.title}". ${slide.bodyText || '(no body text)'}`;
+      },
+    );
+
+    tools.register(
+      {
+        name: 'add_slide',
+        description:
+          'Add a new slide with a title and body text at the end of the presentation.',
+        parameters: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            body: { type: 'string' },
+          },
+          required: ['title'],
+        },
+      },
+      async (args) => {
+        const presentationId = getDocumentIdFromUrl(window.location.href);
+        if (!presentationId) return 'Could not find the presentation ID.';
+        const res = await new Promise<any>((resolve) =>
+          chrome.runtime.sendMessage(
+            {
+              action: 'addSlide',
+              presentationId,
+              title: String(args.title ?? ''),
+              body: String(args.body ?? ''),
+            },
+            (r) => {
+              void chrome.runtime.lastError;
+              resolve(r);
+            },
+          ),
+        );
+        return res?.success
+          ? `Added a slide titled "${args.title}" at the end.`
+          : `Write failed: ${res?.error ?? 'no response'}. The user may lack edit access.`;
+      },
+    );
+  };
+
+  if (surface === 'sheets') registerSheetsTools();
+  if (surface === 'docs') registerDocsTools();
+  if (surface === 'slides') registerSlidesTools();
 
   const llm = new LLMClient(naviConfig.openaiApiKey, tools);
   llm.setLanguage(LLM_LANGUAGE_NAME[settings.language]);
+  llm.setSurface(SURFACE_LABEL[surface]);
 
   // ---- Speech: player + wake coordination ------------------------------
 
@@ -441,20 +597,21 @@ async function initializeNavi(): Promise<void> {
     scanState = 'scanning';
     overview = null;
 
-    const workbook = await requestWorkbook();
-    if (!workbook.success || !workbook.tabs || workbook.tabs.length === 0) {
-      scanError = workbook.error ?? 'no sheets found';
-      scanState = 'failed';
-      if (announceOverviewWhenReady) {
-        announceOverviewWhenReady = false;
-        scanState = 'idle'; // next summon retries
-        const failMsg = accountEmail
-          ? t('readFailAccount', { email: accountEmail, details: scanError })
-          : t('readFail', { details: scanError });
-        speakThenListen(failMsg, { listen: false });
-      }
+    if (surface === 'docs') {
+      await preScanDocs();
       return;
     }
+    if (surface === 'slides') {
+      await preScanSlides();
+      return;
+    }
+
+    const workbook = await requestWorkbook();
+    if (!workbook.success || !workbook.tabs || workbook.tabs.length === 0) {
+      scanFailed(workbook.error ?? 'no sheets found');
+      return;
+    }
+    surfaceTitle = workbook.title ?? 'Untitled workbook';
 
     const tabs = workbook.tabs;
     knownTabs = tabs;
@@ -486,18 +643,100 @@ async function initializeNavi(): Promise<void> {
       }),
     );
 
-    overview = buildSpokenOverview(t, {
-      tabs,
-      activeTabTitle,
-      activeTabValues:
-        sections.find((section) => section.title === activeTabTitle)?.values ?? [],
-    });
-    scanState = 'ready';
+    scanReady(
+      buildSpokenOverview(t, {
+        tabs,
+        activeTabTitle,
+        activeTabValues:
+          sections.find((section) => section.title === activeTabTitle)?.values ??
+          [],
+      }),
+    );
+  }
 
+  function scanFailed(details: string): void {
+    scanError = details;
+    scanState = 'failed';
+    if (announceOverviewWhenReady) {
+      announceOverviewWhenReady = false;
+      scanState = 'idle';
+      const failMsg = accountEmail
+        ? t('readFailAccount', { email: accountEmail, details })
+        : t('readFail', { details });
+      speakThenListen(failMsg, { listen: false });
+    }
+  }
+
+  function scanReady(newOverview: string): void {
+    overview = newOverview;
+    scanState = 'ready';
     if (announceOverviewWhenReady) {
       announceOverviewWhenReady = false;
       speakThenListen(`${overview} ${t('whatToKnow')}`);
     }
+  }
+
+  async function preScanDocs(): Promise<void> {
+    const documentId = getDocumentIdFromUrl(window.location.href);
+    const res = documentId
+      ? await new Promise<any>((resolve) =>
+          chrome.runtime.sendMessage({ action: 'getDocument', documentId }, (r) => {
+            void chrome.runtime.lastError;
+            resolve(r);
+          }),
+        )
+      : null;
+    if (!res?.success || !res.outline) {
+      scanFailed(res?.error ?? 'could not find the document');
+      return;
+    }
+    const o = res.outline;
+    surfaceTitle = o.title;
+    llm.setSpreadsheetContext(
+      `Google Doc "${o.title}"\nHeadings: ${o.headings.join(' | ') || '(none)'}\n\n${o.text}`,
+    );
+    scanReady(
+      o.headings.length > 0
+        ? t('overviewDoc', {
+            title: o.title,
+            words: o.wordCount,
+            count: o.headings.length,
+            names: o.headings.slice(0, 6).join(', '),
+          })
+        : t('overviewDocNoHeadings', { title: o.title, words: o.wordCount }),
+    );
+  }
+
+  async function preScanSlides(): Promise<void> {
+    const presentationId = getDocumentIdFromUrl(window.location.href);
+    const res = presentationId
+      ? await new Promise<any>((resolve) =>
+          chrome.runtime.sendMessage(
+            { action: 'getPresentation', presentationId },
+            (r) => {
+              void chrome.runtime.lastError;
+              resolve(r);
+            },
+          ),
+        )
+      : null;
+    if (!res?.success || !res.outline) {
+      scanFailed(res?.error ?? 'could not find the presentation');
+      return;
+    }
+    const o = res.outline;
+    surfaceTitle = o.title;
+    const slideLines = o.slides
+      .map((sl: any) => `Slide ${sl.index}: ${sl.title}\n${sl.bodyText}`)
+      .join('\n\n');
+    llm.setSpreadsheetContext(`Google Slides "${o.title}"\n\n${slideLines}`);
+    scanReady(
+      t('overviewSlides', {
+        title: o.title,
+        count: o.slides.length,
+        first: o.slides[0]?.title ?? '(empty)',
+      }),
+    );
   }
 
   // ---- Summon flow -------------------------------------------------------
@@ -801,6 +1040,9 @@ async function initializeNavi(): Promise<void> {
     panel.removeThinking();
     panel.addMessage(aiResponse, 'ai');
     speakResponse(aiResponse);
+
+    // Cross-app memory: other tabs can recall this answer (NAVI-019 ph. 1).
+    void saveFinding(SURFACE_LABEL[surface], surfaceTitle, aiResponse);
   }
 
   // ---- Kick off: silent readiness ----------------------------------------

@@ -6,8 +6,9 @@
 export function buildSystemPrompt(
   spreadsheetContext: string,
   languageName = 'English',
+  surfaceLabel = 'Google Sheets',
 ): string {
-  return `You are NAVI, an AI accessibility assistant designed specifically for blind and visually impaired (BVI) users working with Google Sheets.
+  return `You are NAVI, an AI accessibility assistant designed specifically for blind and visually impaired (BVI) users working with ${surfaceLabel}.
 
 Your behavior guidelines:
 - Always be concise and clear
@@ -27,6 +28,8 @@ Your behavior guidelines:
 - After a tool succeeds, confirm what happened to the user in plain language; after a failure, explain it simply and suggest what to try
 - Everything you write is read aloud — never output raw JSON, code, or cell-reference dumps unless asked
 
-Here is the current spreadsheet data:
+- The recall_recent tool remembers what you told the user in OTHER Google tabs this session — use it when they reference "that number" or "the figure from the sheet"
+
+Here is the current document data:
 ${spreadsheetContext}`;
 }

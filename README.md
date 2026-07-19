@@ -25,6 +25,10 @@ Reading and editing sheets both use your Google sign-in (OAuth), so **private sp
 
 The extension ID is pinned to `fojpekkjeokfmckeohalgnmdjcdeejme` (via the `key` field in the manifest), so it is the same on every machine. In **Google Cloud Console → APIs & Services → Credentials → the NAVI OAuth client (Chrome extension)**, set the **Item ID** to that value once. Reading and chat work without this; cell edits need it to authenticate.
 
+## Where NAVI works
+
+Google **Sheets**, **Docs**, and **Slides** — the same "Hey NAVI" everywhere. She remembers her recent answers across tabs in the session: ask for a number in Sheets, open your Doc, and say *"add a paragraph with that revenue figure"*.
+
 ## Using NAVI (voice-first)
 
 Open a sheet and **just say "Hey NAVI"** — she answers with a short overview of the workbook and starts listening. Speak your question; she stops recording when you go quiet. The wake word is on by default (menu switch to disable); NAVI pre-reads the workbook silently in the background so her first answer is instant. The typing box is hidden by default — a menu switch brings it back (e.g. for braille keyboards).
