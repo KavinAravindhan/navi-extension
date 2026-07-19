@@ -3,13 +3,20 @@ import { WAKE_PATTERN, WakeWordListener } from './wakeWord';
 
 class FakeRecognition {
   static instances: FakeRecognition[] = [];
+  /** Simulates Chrome's "engine busy" throw for the next N start() calls. */
+  static failStarts = 0;
   continuous = false;
   interimResults = false;
   lang = '';
   onresult: ((event: unknown) => void) | null = null;
   onend: (() => void) | null = null;
   onerror: ((event: { error: string }) => void) | null = null;
-  start = vi.fn();
+  start = vi.fn(() => {
+    if (FakeRecognition.failStarts > 0) {
+      FakeRecognition.failStarts--;
+      throw new Error('recognition engine busy');
+    }
+  });
   stop = vi.fn();
 
   constructor() {
@@ -45,6 +52,7 @@ describe('WakeWordListener', () => {
 
   beforeEach(() => {
     FakeRecognition.instances = [];
+    FakeRecognition.failStarts = 0;
     onWake = vi.fn<() => void>();
     vi.stubGlobal('SpeechRecognition', FakeRecognition);
     listener = new WakeWordListener(onWake);
@@ -118,6 +126,53 @@ describe('WakeWordListener', () => {
     listener.start();
     listener.start();
     expect(FakeRecognition.instances).toHaveLength(1);
+  });
+
+  it('retries when the engine is busy (the dead-after-quit bug)', () => {
+    vi.useFakeTimers();
+    try {
+      FakeRecognition.failStarts = 1; // mic still releasing the engine
+
+      listener.start();
+      expect(listener.isRunning).toBe(false); // first attempt threw
+
+      vi.advanceTimersByTime(400); // retry fires
+
+      expect(listener.isRunning).toBe(true);
+      expect(FakeRecognition.instances).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stop() cancels a pending retry', () => {
+    vi.useFakeTimers();
+    try {
+      FakeRecognition.failStarts = 1;
+      listener.start();
+      listener.stop();
+
+      vi.advanceTimersByTime(2000);
+
+      expect(listener.isRunning).toBe(false);
+      expect(FakeRecognition.instances).toHaveLength(1); // no retry instance
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('gives up after repeated failures instead of hot-looping forever', () => {
+    vi.useFakeTimers();
+    try {
+      FakeRecognition.failStarts = 999;
+      listener.start();
+      vi.advanceTimersByTime(60000);
+
+      expect(listener.isRunning).toBe(false);
+      expect(FakeRecognition.instances.length).toBeLessThanOrEqual(11);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('isSupported() reflects the environment', () => {
