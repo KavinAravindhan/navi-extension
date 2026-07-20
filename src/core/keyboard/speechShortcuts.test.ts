@@ -108,6 +108,7 @@ describe('attachSpeechShortcuts', () => {
   let onOpenNavi: ReturnType<typeof vi.fn<() => void>>;
   let onQuitNavi: ReturnType<typeof vi.fn<() => void>>;
   let onOpenMenu: ReturnType<typeof vi.fn<() => void>>;
+  let onHelp: ReturnType<typeof vi.fn<() => void>>;
   let onScreenReaderMode: ReturnType<typeof vi.fn<() => void>>;
   let onClipboard: ReturnType<typeof vi.fn<() => void>>;
 
@@ -122,6 +123,7 @@ describe('attachSpeechShortcuts', () => {
     onOpenNavi = vi.fn<() => void>();
     onQuitNavi = vi.fn<() => void>();
     onOpenMenu = vi.fn<() => void>();
+    onHelp = vi.fn<() => void>();
     onScreenReaderMode = vi.fn<() => void>();
     onClipboard = vi.fn<() => void>();
     // jsdom-dispatched events are never trusted, so tests opt out of the
@@ -131,6 +133,7 @@ describe('attachSpeechShortcuts', () => {
       onOpenNavi,
       onQuitNavi,
       onOpenMenu,
+      onHelp,
       onScreenReaderMode,
       onClipboard,
       trustedOnly: false,
@@ -205,11 +208,18 @@ describe('attachSpeechShortcuts', () => {
     expect(onOpenMenu).toHaveBeenCalledOnce();
   });
 
-  it('Q and M without Alt do nothing', () => {
+  it('Alt+H asks for the help guide', () => {
+    dispatch('keydown', { key: 'h', code: 'KeyH', altKey: true });
+    expect(onHelp).toHaveBeenCalledOnce();
+  });
+
+  it('Q, M, and H without Alt do nothing', () => {
     dispatch('keydown', { key: 'q', code: 'KeyQ' });
     dispatch('keydown', { key: 'm', code: 'KeyM' });
+    dispatch('keydown', { key: 'h', code: 'KeyH' });
     expect(onQuitNavi).not.toHaveBeenCalled();
     expect(onOpenMenu).not.toHaveBeenCalled();
+    expect(onHelp).not.toHaveBeenCalled();
   });
 
   it('Alt+C asks for the clipboard announcement', () => {

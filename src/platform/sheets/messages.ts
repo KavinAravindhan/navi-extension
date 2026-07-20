@@ -17,11 +17,17 @@ export interface EditCellResponse {
 }
 
 // Sent from the background worker to the content script when the user
-// presses the browser-level open-NAVI shortcut (chrome.commands).
+// presses one of the browser-level shortcuts (chrome.commands). These work
+// even while Google Sheets traps in-page keyboard focus.
 export const OPEN_NAVI_ACTION = 'openNavi' as const;
+export const HELP_NAVI_ACTION = 'naviHelp' as const;
+export const MENU_NAVI_ACTION = 'naviMenu' as const;
 
 export interface OpenNaviMessage {
-  action: typeof OPEN_NAVI_ACTION;
+  action:
+    | typeof OPEN_NAVI_ACTION
+    | typeof HELP_NAVI_ACTION
+    | typeof MENU_NAVI_ACTION;
 }
 
 // ---------------------------------------------------------------------

@@ -16,6 +16,7 @@ describe('buildTourScript', () => {
     expect(script).toContain('press Option and N');
     expect(script).toContain('Alt and M');
     expect(script).toContain('Alt and Q');
+    expect(script).toContain('say help, or press Alt and H');
     expect(script).toContain('replay this tour');
   });
 

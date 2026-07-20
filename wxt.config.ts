@@ -24,6 +24,14 @@ export default defineConfig({
         suggested_key: { default: 'Alt+N' },
         description: 'Open the NAVI assistant',
       },
+      'navi-help': {
+        suggested_key: { default: 'Alt+H' },
+        description: 'NAVI: speak the help guide',
+      },
+      'navi-menu': {
+        suggested_key: { default: 'Alt+M' },
+        description: 'NAVI: open the settings menu',
+      },
     },
 
     oauth2: {

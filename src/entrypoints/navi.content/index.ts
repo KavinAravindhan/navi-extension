@@ -9,6 +9,7 @@ import {
 import { attachSpeechShortcuts } from '@/core/keyboard/speechShortcuts';
 import { LLMClient } from '@/core/llm/client';
 import { ToolRegistry } from '@/core/llm/tools';
+import { buildHelpScript } from '@/core/onboarding/help';
 import { buildTourScript } from '@/core/onboarding/tour';
 import {
   loadSettings,
@@ -23,6 +24,7 @@ import { VoiceRecognition, type VoiceRecognitionOptions } from '@/core/speech/st
 import { WakeWordListener } from '@/core/speech/wakeWord';
 import { WebSpeechEngine } from '@/core/speech/webSpeechEngine';
 import { WhisperRecognition } from '@/core/speech/whisperStt';
+import { detectVoiceCommand } from '@/core/voice/commands';
 import { parseA1Range } from '@/core/workbook/a1';
 import { findImageCells } from '@/core/workbook/formatting';
 import {
@@ -35,6 +37,11 @@ import { buildSpokenOverview, spokenShortcut } from '@/core/workbook/overview';
 import { formatFindings, loadFindings, saveFinding } from '@/core/memory/recentFindings';
 import { getActiveCellA1 } from '@/platform/sheets/activeCell';
 import { requestCellEdit } from '@/platform/sheets/editCell';
+import {
+  HELP_NAVI_ACTION,
+  MENU_NAVI_ACTION,
+  OPEN_NAVI_ACTION,
+} from '@/platform/sheets/messages';
 import { getActiveSheetName } from '@/platform/sheets/location';
 import { navigateToCell, navigateToTab } from '@/platform/sheets/navigate';
 import {
@@ -616,7 +623,9 @@ ${o.text}`;
 
   const wake = new WakeWordListener(() => {
     if (panel.isOpen) {
-      speakThenListen(t('wakeHeard'));
+      // Panel open but the overview never got delivered → give it now.
+      if (introduced) speakThenListen(t('wakeHeard'));
+      else introduce();
     } else {
       panel.open(); // onOpen decides: intro or "Yes?"
     }
@@ -631,6 +640,8 @@ ${o.text}`;
   let overview: string | null = null;
   let announceOverviewWhenReady = false;
   let introduced = false;
+  /** One summon may skip the greeting (help/menu shortcuts open silently). */
+  let suppressIntroOnce = false;
 
   async function preScan(): Promise<void> {
     if (scanState === 'scanning') return;
@@ -714,7 +725,11 @@ ${o.text}`;
     if (announceOverviewWhenReady) {
       announceOverviewWhenReady = false;
       if (!panel.isOpen) return; // she'll introduce it on the next summon
-      speakThenListen(`${overview} ${t('whatToKnow')}`);
+      speakThenListen(`${overview} ${t('whatToKnow')}`, {
+        onSpoken: () => {
+          introduced = true; // the late overview WAS the introduction
+        },
+      });
     }
   }
 
@@ -784,19 +799,29 @@ ${o.text}`;
   // ---- Summon flow -------------------------------------------------------
 
   /** Speaks (or queues) a message; optionally opens the mic when it ends. */
-  function speakThenListen(text: string, opts: { listen?: boolean } = {}): void {
+  function speakThenListen(
+    text: string,
+    opts: { listen?: boolean; onSpoken?: () => void } = {},
+  ): void {
     const listen = opts.listen ?? true;
     panel.addMessage(text, 'ai');
     if (settings.outputMode === 'voice') {
       if (menu.isOpen) {
         pendingSpeech = text;
+        opts.onSpoken?.(); // queued behind the menu still counts as delivered
         return;
       }
-      if (listen) afterSpeechEnds(() => startListening());
+      if (listen || opts.onSpoken) {
+        afterSpeechEnds(() => {
+          opts.onSpoken?.();
+          if (listen) startListening();
+        });
+      }
       player.speak(text);
-    } else if (listen) {
+    } else {
       // SR mode: the live log reads the text; open the mic right away.
-      startListening();
+      opts.onSpoken?.();
+      if (listen) startListening();
     }
   }
 
@@ -805,8 +830,15 @@ ${o.text}`;
     const hello = settings.greetingEnabled ? `${t('greeting')} ` : '';
 
     if (scanState === 'ready' && overview) {
-      introduced = true;
-      speakThenListen(`${hello}${overview} ${t('whatToKnow')}`);
+      // Delivered-only-when-heard (Kavin's report: a summon sometimes never
+      // gives the overview): the intro counts once it plays to the end or is
+      // deliberately skipped. Closing NAVI mid-greeting clears the pending
+      // hook, so the NEXT summon — click, shortcut, or wake word — retries.
+      speakThenListen(`${hello}${overview} ${t('whatToKnow')}`, {
+        onSpoken: () => {
+          introduced = true;
+        },
+      });
       return;
     }
 
@@ -841,6 +873,10 @@ ${o.text}`;
     chrome.runtime.getURL('icons/navi_eye_black_bg.png'),
     {
       onOpen: () => {
+        if (suppressIntroOnce) {
+          suppressIntroOnce = false;
+          return;
+        }
         if (!settings.onboardingDone) {
           settings.onboardingDone = true;
           void saveSettings({ onboardingDone: true });
@@ -996,6 +1032,24 @@ ${o.text}`;
 
   // ---- Global shortcuts + browser command --------------------------------
 
+  /** Speaks the full help guide, opening the panel quietly if needed. */
+  const speakHelp = (): void => {
+    if (!panel.isOpen) {
+      suppressIntroOnce = true;
+      panel.open();
+    }
+    speakThenListen(buildHelpScript(t, { shortcutSpoken: shortcutPhrase }));
+  };
+
+  /** Opens the settings menu from a shortcut, voice command, or command key. */
+  const openMenuRemote = (): void => {
+    if (!panel.isOpen) {
+      suppressIntroOnce = true;
+      panel.open();
+    }
+    if (!menu.isOpen) menu.show();
+  };
+
   attachSpeechShortcuts(document, player, {
     onRateChange: (rate) => {
       settings.speechRate = rate;
@@ -1005,9 +1059,13 @@ ${o.text}`;
     },
     onOpenNavi: () => panel.open(),
     onOpenMenu: () => {
-      if (!panel.isOpen) panel.open();
+      if (!panel.isOpen) {
+        suppressIntroOnce = true;
+        panel.open();
+      }
       menu.toggle();
     },
+    onHelp: () => speakHelp(),
     onQuitNavi: () => {
       if (!panel.isOpen) return;
       if (quitConfirm.press() === 'prompt') {
@@ -1053,9 +1111,12 @@ ${o.text}`;
     },
   });
 
-  // Browser-level open shortcut, forwarded by the background worker.
+  // Browser-level shortcuts, forwarded by the background worker. These work
+  // even while the Sheets grid traps keyboard focus (in-page keys don't).
   chrome.runtime.onMessage.addListener((message: { action?: string }) => {
-    if (message?.action === 'openNavi') panel.open();
+    if (message?.action === OPEN_NAVI_ACTION) panel.open();
+    else if (message?.action === HELP_NAVI_ACTION) speakHelp();
+    else if (message?.action === MENU_NAVI_ACTION) openMenuRemote();
   });
 
   // Which Google account is NAVI using? Spoken in read-failure guidance.
@@ -1086,6 +1147,19 @@ ${o.text}`;
     player.stop();
 
     panel.addMessage(text, 'user');
+
+    // Local voice commands answer instantly — no AI round trip. "Help me
+    // with column B" is NOT a command; the patterns are deliberately narrow.
+    const command = detectVoiceCommand(text);
+    if (command === 'help') {
+      speakHelp();
+      return;
+    }
+    if (command === 'menu') {
+      openMenuRemote();
+      return;
+    }
+
     panel.addMessage(t('thinking'), 'ai', 'navi-thinking');
 
     // Instant acknowledgment on the zero-latency built-in voice, so the
