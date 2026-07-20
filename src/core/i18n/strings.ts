@@ -80,7 +80,7 @@ export const STRINGS = {
     greetingOff: 'Greeting turned off.',
     menuSpeed: 'Speech speed: {rate}',
     menuSpeedInfo:
-      'Speech speed is {rate}. Press Alt and period to speed up, Alt and comma to slow down.',
+      'Speech speed is {rate}. Press {mod} and period to speed up, {mod} and comma to slow down.',
     menuClose: 'Close menu',
     itemSelected: ', selected',
     itemNotSelected: ', not selected',
@@ -104,13 +104,13 @@ export const STRINGS = {
     tourPause:
       'To pause or continue my voice, tap the Shift key once. You can try it right now while I keep talking.',
     tourSpeed:
-      'To change my speed, hold Alt and press period to go faster, or Alt and comma to go slower.',
+      'To change my speed, hold {mod} and press period to go faster, or {mod} and comma to go slower.',
     tourShortcutBound:
-      'You can also open me with the keyboard: press {shortcut}. For my settings menu, press Alt and M. To close me, press Alt and Q twice.',
+      'You can also open me with the keyboard: press {shortcut}. For my settings menu, press {mod} and M. To close me, press {mod} and Q twice.',
     tourTalk:
       'I can read your data, answer questions, and edit cells — just ask.',
     tourHelp:
-      'For a reminder of everything I can do, say help, or press Alt and H.',
+      'For a reminder of everything I can do, say help, or press {mod} and H.',
     tourEnd:
       'You can replay this tour anytime from my menu. Now, your spreadsheet.',
     helpIntro: "Here's how to use me.",
@@ -119,11 +119,11 @@ export const STRINGS = {
     helpSummon: 'To call me, say Hey NAVI anytime.',
     helpShortcut: 'You can also open me with the keyboard: press {shortcut}.',
     helpMenu:
-      'For my settings — voices, languages, and more — say open menu, or press Alt and M.',
+      'For my settings — voices, languages, and more — say open menu, or press {mod} and M.',
     helpExtras:
-      'Press Alt and C to hear the clipboard. Press Control Alt Z for screen reader mode.',
-    helpQuit: 'To close me, press Alt and Q twice.',
-    helpEnd: 'To hear this help again, say help, or press Alt and H.',
+      'Press {mod} and C to hear the clipboard. Press Control {mod} Z for screen reader mode.',
+    helpQuit: 'To close me, press {mod} and Q twice.',
+    helpEnd: 'To hear this help again, say help, or press {mod} and H.',
   },
   id: {
     greeting: 'Halo, saya NAVI.',
@@ -199,7 +199,7 @@ export const STRINGS = {
     greetingOff: 'Sapaan dimatikan.',
     menuSpeed: 'Kecepatan bicara: {rate}',
     menuSpeedInfo:
-      'Kecepatan bicara {rate}. Tekan Alt dan titik untuk mempercepat, Alt dan koma untuk memperlambat.',
+      'Kecepatan bicara {rate}. Tekan {mod} dan titik untuk mempercepat, {mod} dan koma untuk memperlambat.',
     menuClose: 'Tutup menu',
     itemSelected: ', terpilih',
     itemNotSelected: ', tidak terpilih',
@@ -223,13 +223,13 @@ export const STRINGS = {
     tourPause:
       'Untuk menjeda atau melanjutkan suara saya, ketuk tombol Shift sekali. Anda bisa mencobanya sekarang selagi saya bicara.',
     tourSpeed:
-      'Untuk mengubah kecepatan, tahan Alt dan tekan titik untuk mempercepat, atau Alt dan koma untuk memperlambat.',
+      'Untuk mengubah kecepatan, tahan {mod} dan tekan titik untuk mempercepat, atau {mod} dan koma untuk memperlambat.',
     tourShortcutBound:
-      'Anda juga bisa membuka saya dengan keyboard: tekan {shortcut}. Untuk menu pengaturan, tekan Alt dan M. Untuk menutup saya, tekan Alt dan Q dua kali.',
+      'Anda juga bisa membuka saya dengan keyboard: tekan {shortcut}. Untuk menu pengaturan, tekan {mod} dan M. Untuk menutup saya, tekan {mod} dan Q dua kali.',
     tourTalk:
       'Saya bisa membaca data Anda, menjawab pertanyaan, dan mengedit sel — tinggal minta.',
     tourHelp:
-      'Untuk pengingat semua yang bisa saya lakukan, ucapkan bantuan, atau tekan Alt dan H.',
+      'Untuk pengingat semua yang bisa saya lakukan, ucapkan bantuan, atau tekan {mod} dan H.',
     tourEnd:
       'Anda bisa memutar tur ini lagi kapan saja dari menu saya. Sekarang, spreadsheet Anda.',
     helpIntro: 'Begini cara menggunakan saya.',
@@ -238,11 +238,11 @@ export const STRINGS = {
     helpSummon: 'Untuk memanggil saya, ucapkan Hey NAVI kapan saja.',
     helpShortcut: 'Anda juga bisa membuka saya dengan keyboard: tekan {shortcut}.',
     helpMenu:
-      'Untuk pengaturan saya — suara, bahasa, dan lainnya — ucapkan buka menu, atau tekan Alt dan M.',
+      'Untuk pengaturan saya — suara, bahasa, dan lainnya — ucapkan buka menu, atau tekan {mod} dan M.',
     helpExtras:
-      'Tekan Alt dan C untuk mendengar papan klip. Tekan Control Alt Z untuk mode pembaca layar.',
-    helpQuit: 'Untuk menutup saya, tekan Alt dan Q dua kali.',
-    helpEnd: 'Untuk mendengar bantuan ini lagi, ucapkan bantuan, atau tekan Alt dan H.',
+      'Tekan {mod} dan C untuk mendengar papan klip. Tekan Control {mod} Z untuk mode pembaca layar.',
+    helpQuit: 'Untuk menutup saya, tekan {mod} dan Q dua kali.',
+    helpEnd: 'Untuk mendengar bantuan ini lagi, ucapkan bantuan, atau tekan {mod} dan H.',
   },
 } as const;
 

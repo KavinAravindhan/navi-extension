@@ -20,6 +20,19 @@ describe('buildTourScript', () => {
     expect(script).toContain('replay this tour');
   });
 
+  it('speaks Option instead of Alt on a Mac (keys match the keyboard)', () => {
+    const script = buildTourScript(makeT(() => 'en'), {
+      shortcutSpoken: 'Option and N',
+      modKey: 'Option',
+    });
+
+    expect(script).toContain('hold Option and press period');
+    expect(script).toContain('Option and M');
+    expect(script).toContain('Option and Q');
+    expect(script).toContain('Option and H');
+    expect(script).not.toContain('Alt');
+  });
+
   it('speaks setup guidance when Chrome failed to bind the shortcut', () => {
     const script = buildTourScript(makeT(() => 'en'), { shortcutSpoken: null });
 

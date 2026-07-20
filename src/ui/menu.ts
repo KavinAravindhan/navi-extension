@@ -1,4 +1,5 @@
 import type { Translate } from '@/core/i18n/i18n';
+import { modifierKeyWord } from '@/core/i18n/modifierKey';
 import type { Language } from '@/core/i18n/strings';
 import type { ContextScope, OutputMode } from '@/core/settings/settings';
 
@@ -97,7 +98,12 @@ export class NaviMenu {
       label: t('menuSpeed', { rate: this.deps.getSpeechRate() }),
       role: 'menuitem',
       onActivate: () => {
-        this.deps.announce(t('menuSpeedInfo', { rate: this.deps.getSpeechRate() }));
+        this.deps.announce(
+          t('menuSpeedInfo', {
+            rate: this.deps.getSpeechRate(),
+            mod: modifierKeyWord(),
+          }),
+        );
       },
     });
 
