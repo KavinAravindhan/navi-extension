@@ -20,6 +20,19 @@ describe('buildHelpScript', () => {
     expect(script).toContain('Alt and H');
   });
 
+  it('speaks Option instead of Alt on a Mac (keys match the keyboard)', () => {
+    const script = buildHelpScript(makeT(() => 'en'), {
+      shortcutSpoken: 'Option and N',
+      modKey: 'Option',
+    });
+
+    expect(script).toContain('Option and M');
+    expect(script).toContain('Option and H');
+    expect(script).toContain('Option and C');
+    expect(script).toContain('Control Option Z');
+    expect(script).not.toContain('Alt');
+  });
+
   it('omits the keyboard line when Chrome failed to bind the shortcut', () => {
     const script = buildHelpScript(makeT(() => 'en'), { shortcutSpoken: null });
 

@@ -1,8 +1,11 @@
 import type { Translate } from '@/core/i18n/i18n';
+import { modifierKeyWord } from '@/core/i18n/modifierKey';
 
 export interface HelpOptions {
   /** Speakable form of the real open-NAVI binding ("Option and N"), or null. */
   shortcutSpoken?: string | null;
+  /** Spoken modifier word — "Option" on Mac, "Alt" elsewhere. Tests inject. */
+  modKey?: string;
 }
 
 /**
@@ -12,6 +15,7 @@ export interface HelpOptions {
  * pause, skip, and speed all work on the help itself.
  */
 export function buildHelpScript(t: Translate, options: HelpOptions = {}): string {
+  const mod = options.modKey ?? modifierKeyWord();
   const parts = [t('helpIntro'), t('helpAsk'), t('helpSummon')];
 
   if (options.shortcutSpoken) {
@@ -20,11 +24,11 @@ export function buildHelpScript(t: Translate, options: HelpOptions = {}): string
 
   parts.push(
     t('tourPause'),
-    t('tourSpeed'),
-    t('helpMenu'),
-    t('helpExtras'),
-    t('helpQuit'),
-    t('helpEnd'),
+    t('tourSpeed', { mod }),
+    t('helpMenu', { mod }),
+    t('helpExtras', { mod }),
+    t('helpQuit', { mod }),
+    t('helpEnd', { mod }),
   );
   return parts.join('\n');
 }
