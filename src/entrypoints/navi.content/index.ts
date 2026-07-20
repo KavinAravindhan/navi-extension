@@ -640,6 +640,9 @@ ${o.text}`;
   let overview: string | null = null;
   let announceOverviewWhenReady = false;
   let introduced = false;
+  /** True while an introduction is being spoken — a second summon (double
+   *  wake match, repeated Option+N, eye click) must not speak it again. */
+  let introInFlight = false;
   /** One summon may skip the greeting (help/menu shortcuts open silently). */
   let suppressIntroOnce = false;
 
@@ -725,8 +728,10 @@ ${o.text}`;
     if (announceOverviewWhenReady) {
       announceOverviewWhenReady = false;
       if (!panel.isOpen) return; // she'll introduce it on the next summon
+      introInFlight = true;
       speakThenListen(`${overview} ${t('whatToKnow')}`, {
         onSpoken: () => {
+          introInFlight = false;
           introduced = true; // the late overview WAS the introduction
         },
       });
@@ -834,6 +839,7 @@ ${o.text}`;
 
   /** First summon: greeting + instant local overview; later: just "Yes?". */
   function introduce(): void {
+    if (introInFlight) return; // already speaking it — never double-introduce
     const hello = settings.greetingEnabled ? `${t('greeting')} ` : '';
 
     if (scanState === 'ready' && overview) {
@@ -841,8 +847,10 @@ ${o.text}`;
       // gives the overview): the intro counts once it plays to the end or is
       // deliberately skipped. Closing NAVI mid-greeting clears the pending
       // hook, so the NEXT summon — click, shortcut, or wake word — retries.
+      introInFlight = true;
       speakThenListen(`${hello}${overview} ${t('whatToKnow')}`, {
         onSpoken: () => {
+          introInFlight = false;
           introduced = true;
         },
       });
@@ -909,6 +917,7 @@ ${o.text}`;
         quitConfirm.reset();
         stopListening();
         clearPendingListen(); // a stale "listen after speech" must never fire
+        introInFlight = false; // a cut-off intro may retry on the next summon
         announceOverviewWhenReady = false;
         player.stop();
         syncWake();

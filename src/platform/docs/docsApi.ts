@@ -3,6 +3,7 @@
  * pure parsing kept together; reads and writes ride the same OAuth token
  * as Sheets.
  */
+import { fetchJsonWithAuth } from '@/platform/googleAuth';
 
 export interface DocOutline {
   title: string;
@@ -46,18 +47,6 @@ export function parseDocument(doc: any): DocOutline {
   };
 }
 
-async function getAuthToken(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    chrome.identity.getAuthToken({ interactive: true }, (token) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-      } else {
-        resolve(token as string);
-      }
-    });
-  });
-}
-
 export interface GetDocumentResponse {
   success: boolean;
   error?: string;
@@ -70,12 +59,9 @@ export async function handleGetDocument({
   documentId: string;
 }): Promise<GetDocumentResponse> {
   try {
-    const token = await getAuthToken();
-    const response = await fetch(
+    const data = await fetchJsonWithAuth(
       `https://docs.googleapis.com/v1/documents/${documentId}`,
-      { headers: { Authorization: `Bearer ${token}` } },
     );
-    const data = await response.json();
     if (data.error) return { success: false, error: data.error.message };
     return { success: true, outline: parseDocument(data) };
   } catch (error) {
@@ -91,15 +77,11 @@ export async function handleAppendDoc({
   text: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const token = await getAuthToken();
-    const response = await fetch(
+    const data = await fetchJsonWithAuth(
       `https://docs.googleapis.com/v1/documents/${documentId}:batchUpdate`,
       {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           requests: [
             {
@@ -112,7 +94,6 @@ export async function handleAppendDoc({
         }),
       },
     );
-    const data = await response.json();
     if (data.error) return { success: false, error: data.error.message };
     return { success: true };
   } catch (error) {

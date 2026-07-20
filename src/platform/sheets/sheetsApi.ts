@@ -1,4 +1,5 @@
 import { summarizeFormatting } from '@/core/workbook/formatting';
+import { fetchJsonWithAuth } from '@/platform/googleAuth';
 import type {
   CreateChartRequest,
   CreateChartResponse,
@@ -13,19 +14,6 @@ import type {
   SheetTabInfo,
 } from './messages';
 
-/** Wraps chrome.identity.getAuthToken in a promise; prompts sign-in if needed. */
-function getAuthToken(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    chrome.identity.getAuthToken({ interactive: true }, (token) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-      } else {
-        resolve(token as string);
-      }
-    });
-  });
-}
-
 /** Sheet metadata requested for the workbook model (NAVI-007/013/014). */
 const WORKBOOK_FIELDS =
   'properties.title,sheets(properties(sheetId,title,index,gridProperties(rowCount,columnCount)),charts(chartId,spec(title,basicChart(chartType))))';
@@ -38,13 +26,8 @@ export async function handleGetWorkbook({
   spreadsheetId,
 }: GetWorkbookRequest): Promise<GetWorkbookResponse> {
   try {
-    const token = await getAuthToken();
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=${encodeURIComponent(WORKBOOK_FIELDS)}`;
-
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await response.json();
+    const data = await fetchJsonWithAuth(url);
 
     if (data.error) return { success: false, error: data.error.message };
 
@@ -74,13 +57,8 @@ export async function handleReadRange({
   render,
 }: ReadRangeRequest): Promise<ReadRangeResponse> {
   try {
-    const token = await getAuthToken();
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueRenderOption=${render ?? 'FORMATTED_VALUE'}`;
-
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await response.json();
+    const data = await fetchJsonWithAuth(url);
 
     if (data.error) return { success: false, error: data.error.message };
 
@@ -103,8 +81,6 @@ export async function handleCreateChart({
   gridRange,
 }: CreateChartRequest): Promise<CreateChartResponse> {
   try {
-    const token = await getAuthToken();
-
     const sourceColumn = (columnIndex: number) => ({
       sources: [
         {
@@ -148,12 +124,9 @@ export async function handleCreateChart({
     }
 
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
-    const response = await fetch(url, {
+    const data = await fetchJsonWithAuth(url, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         requests: [
           {
@@ -175,7 +148,6 @@ export async function handleCreateChart({
         ],
       }),
     });
-    const data = await response.json();
 
     if (data.error) return { success: false, error: data.error.message };
     return { success: true };
@@ -203,13 +175,8 @@ export async function handleReadFormatting({
   range,
 }: ReadFormattingRequest): Promise<ReadFormattingResponse> {
   try {
-    const token = await getAuthToken();
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?ranges=${encodeURIComponent(range)}&includeGridData=true&fields=${encodeURIComponent(FORMATTING_FIELDS)}`;
-
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await response.json();
+    const data = await fetchJsonWithAuth(url);
 
     if (data.error) return { success: false, error: data.error.message };
 
@@ -253,24 +220,17 @@ export async function handleEditCell({
   newValue,
 }: EditCellRequest): Promise<EditCellResponse> {
   try {
-    const token = await getAuthToken();
-
     const range = `${sheetName}!${cellAddress}`;
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
 
-    const response = await fetch(url, {
+    const data = await fetchJsonWithAuth(url, {
       method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         range: range,
         values: [[newValue]],
       }),
     });
-
-    const data = await response.json();
 
     if (data.error) {
       return { success: false, error: data.error.message };

@@ -2,6 +2,7 @@
  * Google Slides support (cross-app phase 1): read the deck, read one slide,
  * add a titled slide — via the shared OAuth token.
  */
+import { fetchJsonWithAuth } from '@/platform/googleAuth';
 
 export interface SlideInfo {
   index: number;
@@ -43,18 +44,6 @@ export function parsePresentation(deck: any): DeckOutline {
   return { title: deck.title ?? 'Untitled presentation', slides };
 }
 
-async function getAuthToken(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    chrome.identity.getAuthToken({ interactive: true }, (token) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-      } else {
-        resolve(token as string);
-      }
-    });
-  });
-}
-
 export interface GetPresentationResponse {
   success: boolean;
   error?: string;
@@ -67,14 +56,11 @@ export async function handleGetPresentation({
   presentationId: string;
 }): Promise<GetPresentationResponse> {
   try {
-    const token = await getAuthToken();
-    const response = await fetch(
+    const data = await fetchJsonWithAuth(
       `https://slides.googleapis.com/v1/presentations/${presentationId}?fields=${encodeURIComponent(
         'title,slides(objectId,pageElements(shape(placeholder(type),text(textElements(textRun(content))))))',
       )}`,
-      { headers: { Authorization: `Bearer ${token}` } },
     );
-    const data = await response.json();
     if (data.error) return { success: false, error: data.error.message };
     return { success: true, outline: parsePresentation(data) };
   } catch (error) {
@@ -92,7 +78,6 @@ export async function handleAddSlide({
   body: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const token = await getAuthToken();
     const stamp = Date.now().toString(36);
     const slideId = `navi_slide_${stamp}`;
     const titleId = `navi_title_${stamp}`;
@@ -115,18 +100,14 @@ export async function handleAddSlide({
       requests.push({ insertText: { objectId: bodyId, text: body } });
     }
 
-    const response = await fetch(
+    const data = await fetchJsonWithAuth(
       `https://slides.googleapis.com/v1/presentations/${presentationId}:batchUpdate`,
       {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requests }),
       },
     );
-    const data = await response.json();
     if (data.error) return { success: false, error: data.error.message };
     return { success: true };
   } catch (error) {
