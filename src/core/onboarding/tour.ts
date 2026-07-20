@@ -21,6 +21,6 @@ export function buildTourScript(t: Translate, options: TourOptions = {}): string
     parts.push(t('shortcutNotSet'));
   }
 
-  parts.push(t('tourTalk'), t('tourEnd'));
+  parts.push(t('tourTalk'), t('tourHelp'), t('tourEnd'));
   return parts.join('\n');
 }

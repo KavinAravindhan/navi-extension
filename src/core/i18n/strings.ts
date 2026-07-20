@@ -109,8 +109,21 @@ export const STRINGS = {
       'You can also open me with the keyboard: press {shortcut}. For my settings menu, press Alt and M. To close me, press Alt and Q twice.',
     tourTalk:
       'I can read your data, answer questions, and edit cells — just ask.',
+    tourHelp:
+      'For a reminder of everything I can do, say help, or press Alt and H.',
     tourEnd:
       'You can replay this tour anytime from my menu. Now, your spreadsheet.',
+    helpIntro: "Here's how to use me.",
+    helpAsk:
+      'Just talk to me. Ask about your data, edit cells, create charts, switch tabs, or jump to a cell — in Google Sheets, Docs, and Slides.',
+    helpSummon: 'To call me, say Hey NAVI anytime.',
+    helpShortcut: 'You can also open me with the keyboard: press {shortcut}.',
+    helpMenu:
+      'For my settings — voices, languages, and more — say open menu, or press Alt and M.',
+    helpExtras:
+      'Press Alt and C to hear the clipboard. Press Control Alt Z for screen reader mode.',
+    helpQuit: 'To close me, press Alt and Q twice.',
+    helpEnd: 'To hear this help again, say help, or press Alt and H.',
   },
   id: {
     greeting: 'Halo, saya NAVI.',
@@ -215,8 +228,21 @@ export const STRINGS = {
       'Anda juga bisa membuka saya dengan keyboard: tekan {shortcut}. Untuk menu pengaturan, tekan Alt dan M. Untuk menutup saya, tekan Alt dan Q dua kali.',
     tourTalk:
       'Saya bisa membaca data Anda, menjawab pertanyaan, dan mengedit sel — tinggal minta.',
+    tourHelp:
+      'Untuk pengingat semua yang bisa saya lakukan, ucapkan bantuan, atau tekan Alt dan H.',
     tourEnd:
       'Anda bisa memutar tur ini lagi kapan saja dari menu saya. Sekarang, spreadsheet Anda.',
+    helpIntro: 'Begini cara menggunakan saya.',
+    helpAsk:
+      'Cukup bicara dengan saya. Tanyakan tentang data Anda, ubah sel, buat grafik, pindah tab, atau lompat ke sel — di Google Sheets, Docs, dan Slides.',
+    helpSummon: 'Untuk memanggil saya, ucapkan Hey NAVI kapan saja.',
+    helpShortcut: 'Anda juga bisa membuka saya dengan keyboard: tekan {shortcut}.',
+    helpMenu:
+      'Untuk pengaturan saya — suara, bahasa, dan lainnya — ucapkan buka menu, atau tekan Alt dan M.',
+    helpExtras:
+      'Tekan Alt dan C untuk mendengar papan klip. Tekan Control Alt Z untuk mode pembaca layar.',
+    helpQuit: 'Untuk menutup saya, tekan Alt dan Q dua kali.',
+    helpEnd: 'Untuk mendengar bantuan ini lagi, ucapkan bantuan, atau tekan Alt dan H.',
   },
 } as const;
 

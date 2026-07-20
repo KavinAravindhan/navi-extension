@@ -75,6 +75,8 @@ export interface SpeechShortcutOptions {
   onQuitNavi?: () => void;
   /** Called when the menu shortcut (Alt/Option+M) is pressed. */
   onOpenMenu?: () => void;
+  /** Called when the help shortcut (Alt/Option+H) is pressed. */
+  onHelp?: () => void;
   /** Called on Ctrl+Alt+Z — screen reader mode + active cell (NAVI-004). */
   onScreenReaderMode?: () => void;
   /** Called on Alt/Option+C — announce the clipboard (tracker "[NAVI+c]"). */
@@ -120,6 +122,7 @@ export function attachSpeechShortcuts(
     ['KeyN', options.onOpenNavi],
     ['KeyQ', options.onQuitNavi],
     ['KeyM', options.onOpenMenu],
+    ['KeyH', options.onHelp],
     ['KeyC', options.onClipboard],
   ];
 
