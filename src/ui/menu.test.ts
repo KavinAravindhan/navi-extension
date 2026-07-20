@@ -1,17 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeT } from '@/core/i18n/i18n';
 import type { Language } from '@/core/i18n/strings';
-import type {
-  ContextScope,
-  FontSize,
-  OutputMode,
-} from '@/core/settings/settings';
+import type { ContextScope, OutputMode } from '@/core/settings/settings';
 import { NaviMenu, type MenuDeps } from './menu';
 
 describe('NaviMenu', () => {
   let container: HTMLElement;
   let state: {
-    fontSize: FontSize;
     greetingEnabled: boolean;
     rate: number;
     outputMode: OutputMode;
@@ -19,7 +14,6 @@ describe('NaviMenu', () => {
     language: Language;
     voiceChoice: string;
     wakeWordEnabled: boolean;
-    typingVisible: boolean;
   };
   let deps: MenuDeps & {
     announce: ReturnType<typeof vi.fn<(text: string) => void>>;
@@ -37,7 +31,6 @@ describe('NaviMenu', () => {
     document.body.innerHTML = '<div id="navi-menu" style="display: none;"></div>';
     container = document.getElementById('navi-menu')!;
     state = {
-      fontSize: 'medium',
       greetingEnabled: true,
       rate: 1.25,
       outputMode: 'voice',
@@ -45,15 +38,10 @@ describe('NaviMenu', () => {
       language: 'en',
       voiceChoice: 'system',
       wakeWordEnabled: false,
-      typingVisible: false,
     };
     deps = {
       t: makeT(() => state.language),
       announce: vi.fn<(text: string) => void>(),
-      getFontSize: () => state.fontSize,
-      setFontSize: vi.fn((size: FontSize) => {
-        state.fontSize = size;
-      }),
       getGreetingEnabled: () => state.greetingEnabled,
       setGreetingEnabled: vi.fn((enabled: boolean) => {
         state.greetingEnabled = enabled;
@@ -76,10 +64,6 @@ describe('NaviMenu', () => {
         state.voiceChoice = choice;
       }),
       previewVoice: vi.fn<(choice: string, text: string) => void>(),
-      getTypingVisible: () => state.typingVisible,
-      setTypingVisible: vi.fn((visible: boolean) => {
-        state.typingVisible = visible;
-      }),
       getWakeWordEnabled: () => state.wakeWordEnabled,
       setWakeWordEnabled: vi.fn((enabled: boolean) => {
         state.wakeWordEnabled = enabled;
@@ -101,18 +85,11 @@ describe('NaviMenu', () => {
     );
   });
 
-  it('renders text sizes, greeting toggle, speed info, and close', () => {
+  it('renders speed, language, and voices first — then the rest (BVI order)', () => {
     menu.show();
 
     expect(items().map((i) => i.textContent)).toEqual([
-      'Text size: Small',
-      'Text size: Medium',
-      'Text size: Large',
-      'Text size: Extra large',
-      'Read out loud: NAVI voice',
-      'Read out loud: My screen reader',
-      'AI reads: Current tab only',
-      'AI reads: Entire workbook',
+      'Speech speed: 1.25',
       'Language: English',
       'Language: Bahasa Indonesia',
       'Voice: System (fast)',
@@ -120,15 +97,16 @@ describe('NaviMenu', () => {
       'Voice: Shimmer (natural)',
       'Voice: Alloy (natural)',
       'Voice: Onyx (natural)',
-      'Show the typing box',
+      'Read out loud: NAVI voice',
+      'Read out loud: My screen reader',
+      'AI reads: Current tab only',
+      'AI reads: Entire workbook',
       'Wake word: "Hey NAVI"',
       'Greeting when NAVI opens',
-      'Speech speed: 1.25',
       'Play the welcome tour',
       'Close menu',
     ]);
-    expect(itemByLabel('Text size: Medium').getAttribute('aria-checked')).toBe('true');
-    expect(itemByLabel('Text size: Large').getAttribute('aria-checked')).toBe('false');
+    expect(itemByLabel('Language: English').getAttribute('aria-checked')).toBe('true');
     expect(itemByLabel('Greeting when NAVI opens').getAttribute('aria-checked')).toBe('true');
     expect(itemByLabel('Read out loud: NAVI voice').getAttribute('aria-checked')).toBe('true');
   });
@@ -188,18 +166,6 @@ describe('NaviMenu', () => {
     );
   });
 
-  it('the typing box toggle flips visibility and announces it', () => {
-    menu.show();
-
-    itemByLabel('Show the typing box').click();
-    expect(deps.setTypingVisible).toHaveBeenCalledWith(true);
-    expect(deps.announce).toHaveBeenCalledWith('Typing box shown.');
-
-    itemByLabel('Show the typing box').click();
-    expect(deps.setTypingVisible).toHaveBeenCalledWith(false);
-    expect(deps.announce).toHaveBeenCalledWith('Typing box hidden.');
-  });
-
   it('reports open/close so the panel can hand over its space', () => {
     const visibility: boolean[] = [];
     deps.onVisibilityChange = vi.fn((open: boolean) => visibility.push(open));
@@ -223,7 +189,7 @@ describe('NaviMenu', () => {
     );
     // The menu re-renders with Indonesian labels immediately.
     expect(
-      items().some((i) => i.textContent === 'Ukuran teks: Sedang'),
+      items().some((i) => i.textContent === 'Kecepatan bicara: 1.25'),
     ).toBe(true);
   });
 
@@ -242,17 +208,6 @@ describe('NaviMenu', () => {
     expect(
       itemByLabel('Read out loud: NAVI voice').getAttribute('aria-checked'),
     ).toBe('false');
-  });
-
-  it('choosing a text size persists it, announces it, and updates the checkmark', () => {
-    menu.show();
-
-    itemByLabel('Text size: Large').click();
-
-    expect(deps.setFontSize).toHaveBeenCalledWith('large');
-    expect(deps.announce).toHaveBeenCalledWith('Text size set to Large.');
-    expect(itemByLabel('Text size: Large').getAttribute('aria-checked')).toBe('true');
-    expect(itemByLabel('Text size: Medium').getAttribute('aria-checked')).toBe('false');
   });
 
   it('toggling the greeting flips the setting and announces the new state', () => {
@@ -291,14 +246,14 @@ describe('NaviMenu', () => {
 
   it('arrow keys move focus and announce the focused item', () => {
     menu.show();
-    expect(document.activeElement?.textContent).toBe('Text size: Small');
+    expect(document.activeElement?.textContent).toBe('Speech speed: 1.25');
 
     container.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }),
     );
 
-    expect(document.activeElement?.textContent).toBe('Text size: Medium');
-    expect(deps.announce).toHaveBeenCalledWith('Text size: Medium, selected');
+    expect(document.activeElement?.textContent).toBe('Language: English');
+    expect(deps.announce).toHaveBeenCalledWith('Language: English, selected');
   });
 
   it('hide() is safe when already hidden', () => {

@@ -801,14 +801,17 @@ ${o.text}`;
   /** Speaks (or queues) a message; optionally opens the mic when it ends. */
   function speakThenListen(
     text: string,
-    opts: { listen?: boolean; onSpoken?: () => void; chatText?: string } = {},
+    opts: { listen?: boolean; onSpoken?: () => void; chatText?: string | null } = {},
   ): void {
     const listen = opts.listen ?? true;
-    // Long scripts show a compact marker in the chat while being spoken; in
-    // SR mode the chat log is the actual output, so the full text stays.
-    const display =
-      settings.outputMode === 'voice' && opts.chatText ? opts.chatText : text;
-    panel.addMessage(display, 'ai');
+    // Long scripts keep the chat clean: in voice mode, chatText replaces the
+    // logged text (null logs nothing at all). SR mode always logs the full
+    // text — there, the chat log IS the output channel.
+    if (settings.outputMode !== 'voice' || opts.chatText === undefined) {
+      panel.addMessage(text, 'ai');
+    } else if (opts.chatText !== null) {
+      panel.addMessage(opts.chatText, 'ai');
+    }
     if (settings.outputMode === 'voice') {
       if (menu.isOpen) {
         pendingSpeech = text;
@@ -855,21 +858,15 @@ ${o.text}`;
     speakThenListen(`${hello}${t('stillScanning')}`, { listen: false });
   }
 
-  const runTour = (opts: { firstTime: boolean }): void => {
+  // Menu-only (Kavin: never auto-play, keep the chat clean). Voice mode
+  // speaks the script without logging it; in SR mode the chat log IS the
+  // output channel, so there the full text still lands.
+  const runTour = (): void => {
     const script = buildTourScript(t, { shortcutSpoken: shortcutPhrase });
-    const proceed = () => {
-      if (opts.firstTime) introduce();
-    };
     if (settings.outputMode === 'voice') {
-      // Voice mode: the tour is SPOKEN — the chat gets a one-line marker,
-      // not the whole script as a wall of text (Kavin's feedback).
-      panel.addMessage(t('tourPlaying'), 'ai');
-      if (opts.firstTime) afterSpeechEnds(proceed);
       player.speak(script);
     } else {
-      // SR mode: the chat log IS the output channel — full text stays.
       panel.addMessage(script, 'ai');
-      proceed();
     }
   };
 
@@ -885,11 +882,11 @@ ${o.text}`;
           suppressIntroOnce = false;
           return;
         }
+        // No auto-tour (Kavin: the tour plays only when asked for — menu or
+        // help). First-run still gets recorded for future use.
         if (!settings.onboardingDone) {
           settings.onboardingDone = true;
           void saveSettings({ onboardingDone: true });
-          runTour({ firstTime: true });
-          return;
         }
         if (!introduced) {
           introduce();
@@ -940,12 +937,6 @@ ${o.text}`;
   const menu = new NaviMenu(panel.getMenuContainer(), {
     t,
     announce: (text) => announcer.say(text),
-    getFontSize: () => settings.fontSize,
-    setFontSize: (size) => {
-      settings.fontSize = size;
-      panel.applyFontSize(size);
-      void saveSettings({ fontSize: size });
-    },
     getGreetingEnabled: () => settings.greetingEnabled,
     setGreetingEnabled: (enabled) => {
       settings.greetingEnabled = enabled;
@@ -1014,12 +1005,7 @@ ${o.text}`;
       void saveSettings({ wakeWordEnabled: enabled });
       syncWake();
     },
-    getTypingVisible: () => settings.typingVisible,
-    setTypingVisible: (visible) => {
-      settings.typingVisible = visible;
-      void saveSettings({ typingVisible: visible });
-    },
-    onPlayTour: () => runTour({ firstTime: false }),
+    onPlayTour: () => runTour(),
     onVisibilityChange: (open) => {
       panel.setMenuMode(open);
       if (!open) {
@@ -1047,7 +1033,7 @@ ${o.text}`;
       panel.open();
     }
     speakThenListen(buildHelpScript(t, { shortcutSpoken: shortcutPhrase }), {
-      chatText: t('helpPlaying'),
+      chatText: null, // spoken only — no wall of text in the chat
     });
   };
 
