@@ -801,10 +801,14 @@ ${o.text}`;
   /** Speaks (or queues) a message; optionally opens the mic when it ends. */
   function speakThenListen(
     text: string,
-    opts: { listen?: boolean; onSpoken?: () => void } = {},
+    opts: { listen?: boolean; onSpoken?: () => void; chatText?: string } = {},
   ): void {
     const listen = opts.listen ?? true;
-    panel.addMessage(text, 'ai');
+    // Long scripts show a compact marker in the chat while being spoken; in
+    // SR mode the chat log is the actual output, so the full text stays.
+    const display =
+      settings.outputMode === 'voice' && opts.chatText ? opts.chatText : text;
+    panel.addMessage(display, 'ai');
     if (settings.outputMode === 'voice') {
       if (menu.isOpen) {
         pendingSpeech = text;
@@ -853,14 +857,18 @@ ${o.text}`;
 
   const runTour = (opts: { firstTime: boolean }): void => {
     const script = buildTourScript(t, { shortcutSpoken: shortcutPhrase });
-    panel.addMessage(script, 'ai');
     const proceed = () => {
       if (opts.firstTime) introduce();
     };
     if (settings.outputMode === 'voice') {
+      // Voice mode: the tour is SPOKEN — the chat gets a one-line marker,
+      // not the whole script as a wall of text (Kavin's feedback).
+      panel.addMessage(t('tourPlaying'), 'ai');
       if (opts.firstTime) afterSpeechEnds(proceed);
       player.speak(script);
     } else {
+      // SR mode: the chat log IS the output channel — full text stays.
+      panel.addMessage(script, 'ai');
       proceed();
     }
   };
@@ -1038,7 +1046,9 @@ ${o.text}`;
       suppressIntroOnce = true;
       panel.open();
     }
-    speakThenListen(buildHelpScript(t, { shortcutSpoken: shortcutPhrase }));
+    speakThenListen(buildHelpScript(t, { shortcutSpoken: shortcutPhrase }), {
+      chatText: t('helpPlaying'),
+    });
   };
 
   /** Opens the settings menu from a shortcut, voice command, or command key. */
