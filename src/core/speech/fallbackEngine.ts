@@ -35,4 +35,12 @@ export class FallbackSentenceEngine implements SentenceEngine {
   prefetch(text: string, opts: { rate: number; lang: string }): void {
     this.primary.prefetch?.(text, opts);
   }
+
+  // Forwarded to both: only the active engine has audio playing, and a
+  // fallback engine without live-rate support simply picks the new rate up
+  // on its next sentence.
+  setRate(rate: number): void {
+    this.primary.setRate?.(rate);
+    this.fallback.setRate?.(rate);
+  }
 }

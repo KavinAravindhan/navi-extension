@@ -11,6 +11,8 @@ const OPENAI_TTS_URL = 'https://api.openai.com/v1/audio/speech';
 export class OpenAITTSEngine implements SentenceEngine {
   private audio: HTMLAudioElement | null = null;
   private objectUrl: string | null = null;
+  /** Current playback rate — mutable mid-clip via setRate (speed keys). */
+  private rate = 1;
   /** Identity token: any cancel()/new speak() invalidates in-flight work. */
   private token: object = {};
   /** Next-sentence audio fetched ahead of time (kills inter-sentence gaps). */
@@ -29,6 +31,7 @@ export class OpenAITTSEngine implements SentenceEngine {
     this.cancel();
     const token = {};
     this.token = token;
+    this.rate = opts.rate;
 
     void (async () => {
       try {
@@ -43,7 +46,9 @@ export class OpenAITTSEngine implements SentenceEngine {
         this.objectUrl = url;
         const audio = new Audio(url);
         this.audio = audio;
-        audio.playbackRate = opts.rate;
+        // this.rate, not opts.rate: the speed keys may have changed it while
+        // the clip was still being fetched.
+        audio.playbackRate = this.rate;
 
         audio.onended = () => {
           if (this.token !== token) return;
@@ -63,6 +68,12 @@ export class OpenAITTSEngine implements SentenceEngine {
         events.onError((error as Error).message);
       }
     })();
+  }
+
+  /** Live speed change: adjusts the playing clip in place — no restart. */
+  setRate(rate: number): void {
+    this.rate = rate;
+    if (this.audio) this.audio.playbackRate = rate;
   }
 
   /** Kick off the audio fetch for an upcoming sentence. */
