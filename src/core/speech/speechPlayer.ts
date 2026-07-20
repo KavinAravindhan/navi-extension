@@ -26,6 +26,8 @@ export interface SentenceEngine {
   cancel(): void;
   /** Optional: start fetching audio for an upcoming sentence (latency). */
   prefetch?(text: string, opts: { rate: number; lang: string }): void;
+  /** Optional: change the playback rate LIVE, without restarting audio. */
+  setRate?(rate: number): void;
 }
 
 /**
@@ -34,7 +36,8 @@ export interface SentenceEngine {
  * - pause()  cancels the current sentence but keeps the queue position
  * - resume() re-speaks the current sentence from its start
  * - stop()   clears the queue entirely; a later toggle replays the last text
- * - setRate() applies immediately by restarting the current sentence
+ * - setRate() applies LIVE when the engine supports it (natural voice keeps
+ *   talking, just faster); otherwise the current sentence restarts
  *
  * The engine is resolved per sentence, so switching the voice setting takes
  * effect mid-conversation.
@@ -138,13 +141,19 @@ export class SpeechPlayer {
     this.setStatus('idle');
   }
 
-  /** Applies a new rate; a sentence being spoken restarts at the new rate. */
+  /** Applies a new rate — live when possible, so speech keeps flowing. */
   setRate(rate: number): void {
     this.rate = rate;
-    if (this.status === 'speaking') {
-      this.cancelCurrent();
-      this.speakCurrentSentence();
+    if (this.status !== 'speaking') return;
+    if (this.activeEngine?.setRate) {
+      // The engine adjusts the playing audio in place — no restart. Pressing
+      // the speed keys used to replay the whole (often long) sentence.
+      this.activeEngine.setRate(rate);
+      return;
     }
+    // Web Speech can't change rate mid-utterance — restart this sentence.
+    this.cancelCurrent();
+    this.speakCurrentSentence();
   }
 
   // ------------------------------------------------------------------

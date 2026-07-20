@@ -33,6 +33,17 @@ describe('FallbackSentenceEngine', () => {
     expect(onEnd).toHaveBeenCalledOnce();
   });
 
+  it('forwards live rate changes to whichever engine can take them', () => {
+    const primarySetRate = vi.fn<(rate: number) => void>();
+    const primary = { ...makeEngine(), setRate: primarySetRate };
+    const fallback = makeEngine(); // no setRate — must not crash
+    const engine = new FallbackSentenceEngine(primary, fallback);
+
+    engine.setRate(1.5);
+
+    expect(primarySetRate).toHaveBeenCalledWith(1.5);
+  });
+
   it('re-speaks the SAME sentence through the fallback when the primary fails', () => {
     const primary = makeEngine();
     const fallback = makeEngine();

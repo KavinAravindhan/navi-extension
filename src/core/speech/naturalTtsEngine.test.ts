@@ -113,6 +113,27 @@ describe('OpenAITTSEngine', () => {
     expect(onEnd).not.toHaveBeenCalled();
   });
 
+  it('setRate adjusts the PLAYING clip live — no restart, no refetch', async () => {
+    mockFetch.mockResolvedValue(makeAudioResponse());
+    engine.speak('Hello.', { rate: 1.0, lang: 'en-US' }, { onEnd, onError });
+    await flush();
+
+    engine.setRate(2.0);
+
+    expect(FakeAudio.instances[0].playbackRate).toBe(2.0);
+    expect(mockFetch).toHaveBeenCalledOnce(); // same clip keeps playing
+  });
+
+  it('a rate set while the clip is still fetching applies at playback', async () => {
+    mockFetch.mockResolvedValue(makeAudioResponse());
+    engine.speak('Hello.', { rate: 1.0, lang: 'en-US' }, { onEnd, onError });
+
+    engine.setRate(1.75); // speed key pressed before the fetch resolves
+    await flush();
+
+    expect(FakeAudio.instances[0].playbackRate).toBe(1.75);
+  });
+
   it('prefetch caches the audio so speak() needs no second fetch', async () => {
     mockFetch.mockResolvedValue(makeAudioResponse());
 

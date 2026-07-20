@@ -115,6 +115,29 @@ describe('SpeechPlayer', () => {
     expect(synth.current?.rate).toBe(2.0);
   });
 
+  it('setRate goes LIVE through a capable engine — no sentence restart', () => {
+    // The speed keys used to replay the whole (often long) sentence; the
+    // natural voice can change playbackRate in place instead.
+    const spoken: string[] = [];
+    const liveRates: number[] = [];
+    const engine = {
+      speak: (text: string) => {
+        spoken.push(text);
+      },
+      cancel: vi.fn<() => void>(),
+      setRate: (rate: number) => liveRates.push(rate),
+    };
+    const piped = new SpeechPlayer(1.0, {}, () => engine);
+
+    piped.speak('One very long sentence. Two.');
+    piped.setRate(1.5);
+
+    expect(liveRates).toEqual([1.5]);
+    expect(spoken).toEqual(['One very long sentence.']); // spoken ONCE
+    expect(engine.cancel).not.toHaveBeenCalled();
+    expect(piped.getRate()).toBe(1.5);
+  });
+
   it('a new speak() replaces whatever was playing', () => {
     player.speak('Old text one. Old text two.');
     player.speak('New text.');
