@@ -1,10 +1,6 @@
 import type { Translate } from '@/core/i18n/i18n';
 import type { Language } from '@/core/i18n/strings';
-import type {
-  ContextScope,
-  FontSize,
-  OutputMode,
-} from '@/core/settings/settings';
+import type { ContextScope, OutputMode } from '@/core/settings/settings';
 
 /** 'system' or an OpenAI natural voice name. */
 export type VoiceChoice = string;
@@ -17,8 +13,6 @@ export interface MenuDeps {
   t: Translate;
   /** Speak feedback (routed through the announcer). */
   announce: (text: string) => void;
-  getFontSize: () => FontSize;
-  setFontSize: (size: FontSize) => void;
   getGreetingEnabled: () => boolean;
   setGreetingEnabled: (enabled: boolean) => void;
   getSpeechRate: () => number;
@@ -33,8 +27,6 @@ export interface MenuDeps {
   setVoiceChoice: (choice: VoiceChoice) => void;
   /** Speak a sample IN the focused voice so users hear before choosing. */
   previewVoice: (choice: VoiceChoice, text: string) => void;
-  getTypingVisible: () => boolean;
-  setTypingVisible: (visible: boolean) => void;
   getWakeWordEnabled: () => boolean;
   setWakeWordEnabled: (enabled: boolean) => void;
   /** The panel hides the chat while the menu is open (rendering fix). */
@@ -45,18 +37,11 @@ export interface MenuDeps {
   onClose?: () => void;
 }
 
-const FONT_ORDER: FontSize[] = ['small', 'medium', 'large', 'xlarge'];
-const FONT_LABEL_KEYS = {
-  small: 'sizeSmall',
-  medium: 'sizeMedium',
-  large: 'sizeLarge',
-  xlarge: 'sizeXlarge',
-} as const;
-
 /**
- * The NAVI menu (tracker "[NAVI+m] to access menu"): text size, output mode,
- * AI scope, language, greeting, and speed info. Fully keyboard-driven —
- * arrows move, Enter activates, Escape closes — and every move is spoken.
+ * The NAVI menu (tracker "[NAVI+m] to access menu"), ordered by what BVI
+ * users reach for most: speed first, then language and voices, then output
+ * mode, scope, and toggles. Fully keyboard-driven — arrows move, Enter
+ * activates, Escape closes — and every move is spoken.
  */
 export class NaviMenu {
   private items: HTMLButtonElement[] = [];
@@ -108,64 +93,11 @@ export class NaviMenu {
     this.container.innerHTML = '';
     this.items = [];
 
-    const currentSize = this.deps.getFontSize();
-    for (const size of FONT_ORDER) {
-      const sizeLabel = t(FONT_LABEL_KEYS[size]);
-      this.addItem({
-        label: t('menuTextSize', { size: sizeLabel }),
-        role: 'menuitemradio',
-        checked: size === currentSize,
-        onActivate: () => {
-          this.deps.setFontSize(size);
-          this.deps.announce(t('menuTextSizeSet', { size: t(FONT_LABEL_KEYS[size]) }));
-          this.refreshChecks();
-        },
-      });
-    }
-
-    const mode = this.deps.getOutputMode();
     this.addItem({
-      label: t('menuVoiceOutput'),
-      role: 'menuitemradio',
-      checked: mode === 'voice',
+      label: t('menuSpeed', { rate: this.deps.getSpeechRate() }),
+      role: 'menuitem',
       onActivate: () => {
-        this.deps.setOutputMode('voice');
-        this.deps.announce(t('voiceModeOn'));
-        this.refreshChecks();
-      },
-    });
-
-    this.addItem({
-      label: t('menuSrOutput'),
-      role: 'menuitemradio',
-      checked: mode === 'screenreader',
-      onActivate: () => {
-        this.deps.setOutputMode('screenreader');
-        this.deps.announce(t('srOutputOn'));
-        this.refreshChecks();
-      },
-    });
-
-    const scope = this.deps.getContextScope();
-    this.addItem({
-      label: t('menuScopeTab'),
-      role: 'menuitemradio',
-      checked: scope === 'tab',
-      onActivate: () => {
-        this.deps.setContextScope('tab');
-        this.deps.announce(t('scopeTabOn'));
-        this.refreshChecks();
-      },
-    });
-
-    this.addItem({
-      label: t('menuScopeFile'),
-      role: 'menuitemradio',
-      checked: scope === 'file',
-      onActivate: () => {
-        this.deps.setContextScope('file');
-        this.deps.announce(t('scopeFileOn'));
-        this.refreshChecks();
+        this.deps.announce(t('menuSpeedInfo', { rate: this.deps.getSpeechRate() }));
       },
     });
 
@@ -221,14 +153,48 @@ export class NaviMenu {
       });
     }
 
+    const mode = this.deps.getOutputMode();
     this.addItem({
-      label: t('menuTyping'),
-      role: 'menuitemcheckbox',
-      checked: this.deps.getTypingVisible(),
+      label: t('menuVoiceOutput'),
+      role: 'menuitemradio',
+      checked: mode === 'voice',
       onActivate: () => {
-        const visible = !this.deps.getTypingVisible();
-        this.deps.setTypingVisible(visible);
-        this.deps.announce(visible ? t('typingShown') : t('typingHidden'));
+        this.deps.setOutputMode('voice');
+        this.deps.announce(t('voiceModeOn'));
+        this.refreshChecks();
+      },
+    });
+
+    this.addItem({
+      label: t('menuSrOutput'),
+      role: 'menuitemradio',
+      checked: mode === 'screenreader',
+      onActivate: () => {
+        this.deps.setOutputMode('screenreader');
+        this.deps.announce(t('srOutputOn'));
+        this.refreshChecks();
+      },
+    });
+
+    const scope = this.deps.getContextScope();
+    this.addItem({
+      label: t('menuScopeTab'),
+      role: 'menuitemradio',
+      checked: scope === 'tab',
+      onActivate: () => {
+        this.deps.setContextScope('tab');
+        this.deps.announce(t('scopeTabOn'));
+        this.refreshChecks();
+      },
+    });
+
+    this.addItem({
+      label: t('menuScopeFile'),
+      role: 'menuitemradio',
+      checked: scope === 'file',
+      onActivate: () => {
+        this.deps.setContextScope('file');
+        this.deps.announce(t('scopeFileOn'));
         this.refreshChecks();
       },
     });
@@ -254,14 +220,6 @@ export class NaviMenu {
         this.deps.setGreetingEnabled(enabled);
         this.deps.announce(enabled ? t('greetingOn') : t('greetingOff'));
         this.refreshChecks();
-      },
-    });
-
-    this.addItem({
-      label: t('menuSpeed', { rate: this.deps.getSpeechRate() }),
-      role: 'menuitem',
-      onActivate: () => {
-        this.deps.announce(t('menuSpeedInfo', { rate: this.deps.getSpeechRate() }));
       },
     });
 

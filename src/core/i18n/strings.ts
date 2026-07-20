@@ -124,8 +124,6 @@ export const STRINGS = {
       'Press Alt and C to hear the clipboard. Press Control Alt Z for screen reader mode.',
     helpQuit: 'To close me, press Alt and Q twice.',
     helpEnd: 'To hear this help again, say help, or press Alt and H.',
-    tourPlaying: '🔊 Playing the quick tour — tap Shift twice to skip it.',
-    helpPlaying: '🔊 Playing the help guide — tap Shift twice to skip it.',
   },
   id: {
     greeting: 'Halo, saya NAVI.',
@@ -245,8 +243,6 @@ export const STRINGS = {
       'Tekan Alt dan C untuk mendengar papan klip. Tekan Control Alt Z untuk mode pembaca layar.',
     helpQuit: 'Untuk menutup saya, tekan Alt dan Q dua kali.',
     helpEnd: 'Untuk mendengar bantuan ini lagi, ucapkan bantuan, atau tekan Alt dan H.',
-    tourPlaying: '🔊 Memutar tur singkat — ketuk Shift dua kali untuk melewatinya.',
-    helpPlaying: '🔊 Memutar panduan bantuan — ketuk Shift dua kali untuk melewatinya.',
   },
 } as const;
 
