@@ -44,6 +44,10 @@ export class WakeWordListener {
     recognition.lang = this.lang;
 
     recognition.onresult = (event: any) => {
+      // One utterance can match twice (interim + final result), and Chrome
+      // still delivers queued events after stop() — a second onWake here
+      // double-opened NAVI and spoke the introduction twice.
+      if (!this.running) return;
       for (let i = event.resultIndex ?? 0; i < event.results.length; i++) {
         const transcript: string = event.results[i][0].transcript ?? '';
         if (WAKE_PATTERN.test(transcript)) {
@@ -101,6 +105,8 @@ export class WakeWordListener {
     this.recognition = null;
     if (recognition) {
       recognition.onend = null;
+      recognition.onresult = null;
+      recognition.onerror = null;
       try {
         recognition.stop();
       } catch {

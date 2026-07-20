@@ -15,6 +15,9 @@ export function installChromeMock() {
     },
     identity: {
       getAuthToken: vi.fn(),
+      removeCachedAuthToken: vi.fn(
+        (_details: { token: string }, cb?: () => void) => cb?.(),
+      ),
     },
     storage: {
       sync: {

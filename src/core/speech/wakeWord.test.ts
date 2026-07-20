@@ -86,6 +86,17 @@ describe('WakeWordListener', () => {
     expect(rec.stop).toHaveBeenCalled();
   });
 
+  it('fires onWake ONCE even when the phrase matches twice (interim + final)', () => {
+    listener.start();
+    const rec = FakeRecognition.instances[0];
+
+    rec.fireTranscript('hey navi'); // interim result
+    rec.fireTranscript('hey navi'); // final result, delivered after stop()
+
+    expect(onWake).toHaveBeenCalledOnce();
+    expect(rec.onresult).toBeNull(); // handler detached on stop
+  });
+
   it('ignores non-matching speech', () => {
     listener.start();
     FakeRecognition.instances[0].fireTranscript('what a heavy navigation menu');
